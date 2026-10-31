@@ -45,6 +45,11 @@ export const CandidatesDirectoryPage: React.FC = () => {
   const [requestingContact, setRequestingContact] = useState(false);
 
   useEffect(() => {
+    if (!user) {
+      navigate('/');
+      return;
+    }
+
     supabase
       .from('industries')
       .select('*')

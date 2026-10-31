@@ -43,6 +43,11 @@ export const JobsDirectoryPage: React.FC = () => {
   const [applying, setApplying] = useState(false);
 
   useEffect(() => {
+    if (!user) {
+      navigate('/');
+      return;
+    }
+
     supabase
       .from('industries')
       .select('*')

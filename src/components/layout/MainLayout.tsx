@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Briefcase, Users, LogIn, UserCircle, Building2, LogOut } from 'lucide-react';
+import { Briefcase, Users, UserCircle, Building2, LogOut } from 'lucide-react';
 import { APP_NAME } from '../../lib/constants';
 import { useAuth } from '../../context/AuthContext';
 
@@ -33,67 +33,66 @@ export const MainLayout: React.FC = () => {
           </Link>
 
           <nav className="flex items-center gap-2 sm:gap-3">
-            <Link
-              to="/vacantes"
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                location.pathname.startsWith('/vacantes')
-                  ? 'bg-brand-50 text-brand-700'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Briefcase className="w-4 h-4" />
-              <span className="hidden xs:inline">Búsquedas</span>
-            </Link>
-
-            <Link
-              to="/postulantes"
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                location.pathname.startsWith('/postulantes')
-                  ? 'bg-brand-50 text-brand-700'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              <span className="hidden xs:inline">Postulantes</span>
-            </Link>
-
-            {user ? (
-              <div className="flex items-center gap-2">
-                {user.role === 'employer' ? (
+            {/* Solo muestra el menú de navegación si el usuario ya ingresó / se registró */}
+            {user && (
+              <>
+                {(user.role === 'candidate' || user.role === 'admin') && (
                   <Link
-                    to="/mi-comercio"
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs sm:text-sm font-bold shadow-sm transition-colors"
+                    to="/vacantes"
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      location.pathname.startsWith('/vacantes')
+                        ? 'bg-brand-50 text-brand-700'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
                   >
-                    <Building2 className="w-4 h-4" />
-                    <span>Mi Comercio</span>
-                  </Link>
-                ) : (
-                  <Link
-                    to="/mi-perfil"
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs sm:text-sm font-semibold shadow-sm transition-colors"
-                  >
-                    <UserCircle className="w-4 h-4" />
-                    <span>Mi Perfil</span>
+                    <Briefcase className="w-4 h-4" />
+                    <span>Búsquedas Laborales</span>
                   </Link>
                 )}
 
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  title="Cerrar sesión"
-                  className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <Link
-                to="/ingresar"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold shadow-sm transition-colors"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>Ingresar</span>
-              </Link>
+                {(user.role === 'employer' || user.role === 'admin') && (
+                  <Link
+                    to="/postulantes"
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      location.pathname.startsWith('/postulantes')
+                        ? 'bg-brand-50 text-brand-700'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>Ver Postulantes</span>
+                  </Link>
+                )}
+
+                <div className="flex items-center gap-2">
+                  {user.role === 'employer' ? (
+                    <Link
+                      to="/mi-comercio"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs sm:text-sm font-bold shadow-sm transition-colors"
+                    >
+                      <Building2 className="w-4 h-4" />
+                      <span>Mi Comercio</span>
+                    </Link>
+                  ) : (
+                    <Link
+                      to="/mi-perfil"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs sm:text-sm font-semibold shadow-sm transition-colors"
+                    >
+                      <UserCircle className="w-4 h-4" />
+                      <span>Mi Perfil</span>
+                    </Link>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    title="Cerrar sesión"
+                    className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+              </>
             )}
           </nav>
         </div>

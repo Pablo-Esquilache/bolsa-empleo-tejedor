@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { UserRole } from '../types/database';
 
 export interface SessionUser {
@@ -17,6 +17,21 @@ interface AuthContextValue {
 
 const STORAGE_KEY = 'bolsa_empleo_tejedor_session_v1';
 
+function readStoredSession(): { token: string | null; user: SessionUser | null } {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.token && parsed?.user) {
+        return { token: parsed.token, user: parsed.user };
+      }
+    }
+  } catch {
+    // ignore corrupted storage
+  }
+  return { token: null, user: null };
+}
+
 const AuthContext = createContext<AuthContextValue>({
   token: null,
   user: null,
@@ -25,23 +40,9 @@ const AuthContext = createContext<AuthContextValue>({
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<SessionUser | null>(null);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.token && parsed?.user) {
-          setToken(parsed.token);
-          setUser(parsed.user);
-        }
-      }
-    } catch {
-      // ignore corrupted storage
-    }
-  }, []);
+  const initial = readStoredSession();
+  const [token, setToken] = useState<string | null>(initial.token);
+  const [user, setUser] = useState<SessionUser | null>(initial.user);
 
   const setSession = (newToken: string, newUser: SessionUser) => {
     setToken(newToken);
