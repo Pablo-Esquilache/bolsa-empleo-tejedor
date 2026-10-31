@@ -49,6 +49,11 @@ export const CandidatesDirectoryPage: React.FC = () => {
       navigate('/');
       return;
     }
+    // Un postulante NUNCA puede ver el directorio de otros postulantes
+    if (user.role === 'candidate') {
+      navigate('/vacantes');
+      return;
+    }
 
     supabase
       .from('industries')
@@ -68,7 +73,7 @@ export const CandidatesDirectoryPage: React.FC = () => {
         if (data) setCandidates(data);
         setLoading(false);
       });
-  }, []);
+  }, [user, navigate]);
 
   const filteredCandidates = candidates.filter((cand) => {
     if (locationFilter.province && cand.province !== locationFilter.province) return false;

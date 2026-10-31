@@ -1,18 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { UserPlus, Building2, Search, Shield, CheckCircle2, ArrowRight } from 'lucide-react';
-import { APP_NAME, INITIAL_INDUSTRIES, INITIAL_LOCALITIES } from '../lib/constants';
+import { APP_NAME, INITIAL_INDUSTRIES } from '../lib/constants';
 
 export const HomePage: React.FC = () => {
   return (
     <div className="space-y-12 pb-12">
-      {/* Hero Principal con los dos botones de acción */}
+      {/* Hero Principal sin cartelito de ubicación arriba */}
       <section className="bg-gradient-to-b from-brand-900 via-brand-800 to-brand-700 text-white py-14 sm:py-20 px-4">
         <div className="max-w-4xl mx-auto text-center space-y-6">
-          <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 text-brand-100 text-xs sm:text-sm font-medium border border-white/15">
-            📍 Carlos Tejedor, Tres Algarrobos, Colonia Seré, Timote, Curarú y la región
-          </span>
-
           <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
             {APP_NAME}
           </h1>
@@ -39,7 +35,7 @@ export const HomePage: React.FC = () => {
                 </p>
               </div>
               <div className="mt-6 inline-flex items-center gap-2 text-brand-700 font-semibold text-sm">
-                <span>Cargar mi perfil de postulante</span>
+                <span>Ingresar como postulante</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             </Link>
@@ -60,7 +56,7 @@ export const HomePage: React.FC = () => {
                 </p>
               </div>
               <div className="mt-6 inline-flex items-center gap-2 text-amber-400 font-semibold text-sm">
-                <span>Registrar mi comercio o publicar aviso</span>
+                <span>Ingresar como comercio</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             </Link>
@@ -68,7 +64,6 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* Accesos rápidos a los directorios */}
       <section className="max-w-6xl mx-auto px-4 space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-2">
@@ -87,7 +82,7 @@ export const HomePage: React.FC = () => {
             </div>
             <h3 className="font-bold text-slate-900">Filtros Precisos</h3>
             <p className="text-sm text-slate-600">
-              Encontrá rápido por localidad ({INITIAL_LOCALITIES.slice(0, 4).map((l) => l.name).join(', ')} y más) y entre {INITIAL_INDUSTRIES.length} rubros precargados.
+              Encontrá rápido por provincia, partido y localidad entre {INITIAL_INDUSTRIES.length} rubros precargados.
             </p>
           </div>
 

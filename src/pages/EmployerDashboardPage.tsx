@@ -8,6 +8,13 @@ import {
   CheckCircle2,
   AlertCircle,
   Briefcase,
+  PauseCircle,
+  PlayCircle,
+  Trash2,
+  Users,
+  FileText,
+  MessageCircle,
+  XCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -57,20 +64,20 @@ export const EmployerDashboardPage: React.FC = () => {
   const [jobEducation, setJobEducation] = useState<string>('Primario');
   const [jobDescription, setJobDescription] = useState('');
 
-  // Mis búsquedas
+  // Mis búsquedas + Postulantes recibidos
   const [myJobs, setMyJobs] = useState<any[]>([]);
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  const loadMyJobs = async (uid: string) => {
-    const { data } = await supabase
-      .from('job_posts')
-      .select('*')
-      .eq('employer_id', uid)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-    if (data) setMyJobs(data);
+  const loadMyJobs = async (currentToken: string) => {
+    const { data } = await supabase.rpc('employer_get_my_jobs_with_applicants', {
+      p_token: currentToken,
+    });
+    if (Array.isArray(data)) {
+      setMyJobs(data);
+    }
   };
 
   useEffect(() => {
@@ -88,33 +95,33 @@ export const EmployerDashboardPage: React.FC = () => {
         if (data && data.length > 0) setIndustriesCatalog(data as IndustryItem[]);
       });
 
-    supabase
-      .from('employer_profiles')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setTradeName(data.trade_name || '');
-          setLegalName(data.legal_name || '');
-          setCuit(data.cuit || '');
-          setIndustry(data.industry || INITIAL_INDUSTRIES[0].name);
-          setLocation({
-            province: data.province || 'Buenos Aires',
-            district: data.district || 'Carlos Tejedor',
-            locality: data.locality || 'Carlos Tejedor',
-          });
-          setJobLocation({
-            province: data.province || 'Buenos Aires',
-            district: data.district || 'Carlos Tejedor',
-            locality: data.locality || 'Carlos Tejedor',
-          });
-          setDescription(data.description || '');
-          setLogoUrl(data.logo_url || null);
-        }
-      });
+    supabase.rpc('get_my_employer_data', { p_token: token }).then(({ data }) => {
+      if (data?.profile) {
+        const p = data.profile;
+        setTradeName(p.trade_name || '');
+        setLegalName(p.legal_name || '');
+        setCuit(p.cuit || '');
+        setIndustry(p.industry || INITIAL_INDUSTRIES[0].name);
+        setLocation({
+          province: p.province || 'Buenos Aires',
+          district: p.district || 'Carlos Tejedor',
+          locality: p.locality || 'Carlos Tejedor',
+        });
+        setJobLocation({
+          province: p.province || 'Buenos Aires',
+          district: p.district || 'Carlos Tejedor',
+          locality: p.locality || 'Carlos Tejedor',
+        });
+        setDescription(p.description || '');
+        setLogoUrl(p.logo_url || null);
+      }
+      if (data?.private) {
+        setContactPersonName(data.private.contact_person_name || '');
+        setPhone(data.private.phone || '');
+      }
+    });
 
-    loadMyJobs(user.id);
+    loadMyJobs(token);
   }, [user, token, navigate]);
 
   const suggestedPositionsForJob =
@@ -138,10 +145,6 @@ export const EmployerDashboardPage: React.FC = () => {
 
       const { data: pub } = supabase.storage.from('avatars_and_logos').getPublicUrl(filePath);
       setLogoUrl(pub.publicUrl);
-      setMessage({
-        type: 'ok',
-        text: `Logo comprimido a WebP (${Math.round(compressed.size / 1024)} KB) y subido con éxito.`,
-      });
     } catch (err: any) {
       setMessage({ type: 'err', text: err.message || 'Error al subir el logo.' });
     } finally {
@@ -182,10 +185,8 @@ export const EmployerDashboardPage: React.FC = () => {
 
       if (error) throw new Error(error.message);
 
-      setMessage({
-        type: 'ok',
-        text: '¡Ficha de tu comercio guardada! Ya podés publicar búsquedas laborales o contactar postulantes.',
-      });
+      // Al guardar los datos del comercio, lo redirige directo a Ver Postulantes
+      navigate('/postulantes');
     } catch (err: any) {
       setMessage({ type: 'err', text: err.message || 'Error al guardar el comercio.' });
     } finally {
@@ -225,14 +226,8 @@ export const EmployerDashboardPage: React.FC = () => {
 
       if (error) throw new Error(error.message);
 
-      setJobTitle('');
-      setJobDescription('');
-      await loadMyJobs(user.id);
-      setTab('my_jobs');
-      setMessage({
-        type: 'ok',
-        text: '¡Búsqueda laboral publicada y activa en el directorio!',
-      });
+      // Al publicar la búsqueda laboral, redirige directo a Ver Postulantes
+      navigate('/postulantes');
     } catch (err: any) {
       setMessage({ type: 'err', text: err.message || 'Error al publicar la búsqueda.' });
     } finally {
@@ -240,12 +235,54 @@ export const EmployerDashboardPage: React.FC = () => {
     }
   };
 
+  const handleJobAction = async (jobId: string, action: 'pause' | 'activate' | 'delete') => {
+    if (!token) return;
+    if (
+      action === 'delete' &&
+      !window.confirm('¿Seguro que querés cerrar y eliminar esta búsqueda laboral?')
+    ) {
+      return;
+    }
+
+    const { error } = await supabase.rpc('employer_manage_job_post', {
+      p_token: token,
+      p_job_id: jobId,
+      p_action: action,
+    });
+
+    if (error) {
+      setMessage({ type: 'err', text: error.message });
+      return;
+    }
+
+    await loadMyJobs(token);
+  };
+
+  const handleApplicationDecision = async (
+    applicationId: string,
+    nextStatus: 'shortlisted' | 'rejected'
+  ) => {
+    if (!token) return;
+    const { error } = await supabase.rpc('employer_update_application_status', {
+      p_token: token,
+      p_application_id: applicationId,
+      p_next_status: nextStatus,
+    });
+
+    if (error) {
+      setMessage({ type: 'err', text: error.message });
+      return;
+    }
+
+    await loadMyJobs(token);
+  };
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Panel de Mi Comercio</h1>
         <p className="text-sm text-slate-600">
-          Gestioná los datos de tu comercio y publicá búsquedas laborales al instante.
+          Gestioná los datos de tu comercio, tus búsquedas laborales y los postulantes anotados.
         </p>
       </div>
 
@@ -322,10 +359,10 @@ export const EmployerDashboardPage: React.FC = () => {
               )}
             </div>
 
-            <div className="space-y-1.5">
+            <div>
               <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold cursor-pointer transition-colors">
                 <Camera className="w-4 h-4" />
-                <span>{uploadingLogo ? 'Comprimiendo...' : 'Subir Logo del Comercio'}</span>
+                <span>{uploadingLogo ? 'Subiendo logo...' : 'Subir Logo del Comercio'}</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -333,9 +370,6 @@ export const EmployerDashboardPage: React.FC = () => {
                   className="hidden"
                 />
               </label>
-              <p className="text-xs text-slate-500">
-                Se comprime automáticamente a WebP liviano antes de subir.
-              </p>
             </div>
           </div>
 
@@ -427,7 +461,7 @@ export const EmployerDashboardPage: React.FC = () => {
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-sm transition-colors"
           >
             <Save className="w-4 h-4" />
-            <span>{saving ? 'Guardando...' : 'Guardar Ficha del Comercio'}</span>
+            <span>{saving ? 'Guardando...' : 'Guardar Comercio e Ir a Ver Postulantes'}</span>
           </button>
         </form>
       )}
@@ -520,7 +554,7 @@ export const EmployerDashboardPage: React.FC = () => {
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-sm transition-colors"
           >
             <PlusCircle className="w-4 h-4" />
-            <span>{saving ? 'Publicando...' : 'Publicar Búsqueda Ahora'}</span>
+            <span>{saving ? 'Publicando...' : 'Publicar Búsqueda e Ir a Ver Postulantes'}</span>
           </button>
         </form>
       )}
@@ -535,25 +569,175 @@ export const EmployerDashboardPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            myJobs.map((job) => (
-              <div
-                key={job.id}
-                className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                      {job.status === 'active' ? 'Activa' : 'Pausada'}
-                    </span>
-                    <span className="text-xs text-slate-500">
-                      {job.locality}, {job.district}
-                    </span>
+            myJobs.map((job) => {
+              const applicants: any[] = job.applicants || [];
+              const isExpanded = expandedJobId === job.id;
+
+              return (
+                <div
+                  key={job.id}
+                  className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            job.status === 'active'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {job.status === 'active' ? 'Activa' : 'Pausada'}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {job.locality}, {job.district} · {job.industry}
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-900">{job.title}</h3>
+                      <p className="text-xs text-slate-600">{job.description}</p>
+                    </div>
+
+                    {/* Botones de gestión de la búsqueda */}
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedJobId(isExpanded ? null : job.id)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 border border-brand-200 text-xs font-bold"
+                      >
+                        <Users className="w-4 h-4" />
+                        <span>Postulantes anotados ({applicants.length})</span>
+                      </button>
+
+                      {job.status === 'active' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleJobAction(job.id, 'pause')}
+                          className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold"
+                        >
+                          <PauseCircle className="w-4 h-4" />
+                          <span>Pausar</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleJobAction(job.id, 'activate')}
+                          className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-xs font-bold"
+                        >
+                          <PlayCircle className="w-4 h-4" />
+                          <span>Reactivar</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleJobAction(job.id, 'delete')}
+                        className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 text-xs font-bold"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Eliminar</span>
+                      </button>
+                    </div>
                   </div>
-                  <h3 className="text-base font-bold text-slate-900">{job.title}</h3>
-                  <p className="text-xs text-slate-600 line-clamp-2">{job.description}</p>
+
+                  {/* Listado desplegable de postulantes anotados en este aviso */}
+                  {isExpanded && (
+                    <div className="pt-3 border-t border-slate-200 space-y-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                        Postulantes anotados en "{job.title}"
+                      </h4>
+
+                      {applicants.length === 0 ? (
+                        <p className="text-xs text-slate-500 py-2">
+                          Aún no se postularon vecinos a este aviso.
+                        </p>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {applicants.map((app) => (
+                            <div
+                              key={app.application_id}
+                              className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                            >
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-sm text-slate-900">
+                                    {app.first_name} {app.last_name}
+                                  </span>
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                      app.application_status === 'shortlisted'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : app.application_status === 'rejected'
+                                        ? 'bg-rose-100 text-rose-800'
+                                        : 'bg-blue-100 text-blue-800'
+                                    }`}
+                                  >
+                                    {app.application_status === 'shortlisted'
+                                      ? 'Confirmado / Preseleccionado'
+                                      : app.application_status === 'rejected'
+                                      ? 'Descartado'
+                                      : 'Recibido'}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-600">
+                                  {app.locality} · {app.education_level} ·{' '}
+                                  {(app.availability || []).join(', ')}
+                                </p>
+                                {app.bio_short && (
+                                  <p className="text-xs text-slate-500">{app.bio_short}</p>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                {app.cv_path && (
+                                  <a
+                                    href={app.cv_path}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                                  >
+                                    <FileText className="w-3.5 h-3.5 text-brand-600" />
+                                    <span>Ver CV</span>
+                                  </a>
+                                )}
+
+                                {app.phone && (
+                                  <a
+                                    href={`https://wa.me/549${app.phone}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    onClick={() =>
+                                      handleApplicationDecision(app.application_id, 'shortlisted')
+                                    }
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                                  >
+                                    <MessageCircle className="w-3.5 h-3.5" />
+                                    <span>Confirmar y WhatsApp</span>
+                                  </a>
+                                )}
+
+                                {app.application_status !== 'rejected' && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleApplicationDecision(app.application_id, 'rejected')
+                                    }
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold"
+                                  >
+                                    <XCircle className="w-3.5 h-3.5" />
+                                    <span>Descartar</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}

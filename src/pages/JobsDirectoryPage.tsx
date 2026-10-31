@@ -9,6 +9,7 @@ import {
   X,
   CheckCircle2,
   Send,
+  Trash2,
 } from 'lucide-react';
 import {
   AVAILABILITY_OPTIONS,
@@ -25,8 +26,11 @@ export const JobsDirectoryPage: React.FC = () => {
   const { token, user } = useAuth();
   const navigate = useNavigate();
 
+  const [activeView, setActiveView] = useState<'jobs' | 'employers' | 'my_applications'>('jobs');
   const [industriesCatalog, setIndustriesCatalog] = useState<IndustryItem[]>(INITIAL_INDUSTRIES);
   const [jobs, setJobs] = useState<any[]>([]);
+  const [employers, setEmployers] = useState<any[]>([]);
+  const [myApplications, setMyApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,11 +43,21 @@ export const JobsDirectoryPage: React.FC = () => {
   const [selectedAvailability, setSelectedAvailability] = useState<string[]>([]);
 
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
+  const [selectedEmployer, setSelectedEmployer] = useState<any | null>(null);
   const [applyStatus, setApplyStatus] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
 
+  const loadMyApplications = async (currentToken: string) => {
+    const { data } = await supabase.rpc('candidate_get_my_applications', {
+      p_token: currentToken,
+    });
+    if (Array.isArray(data)) {
+      setMyApplications(data);
+    }
+  };
+
   useEffect(() => {
-    if (!user) {
+    if (!user || !token) {
       navigate('/');
       return;
     }
@@ -57,27 +71,33 @@ export const JobsDirectoryPage: React.FC = () => {
         if (data && data.length > 0) setIndustriesCatalog(data as IndustryItem[]);
       });
 
-    supabase
-      .from('job_posts')
-      .select('*, employer_profiles(trade_name, logo_url)')
-      .eq('status', 'active')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (data) setJobs(data);
-        setLoading(false);
-      });
-  }, []);
+    Promise.all([
+      supabase
+        .from('job_posts')
+        .select('*, employer_profiles(trade_name, logo_url, description)')
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('employer_profiles')
+        .select('*')
+        .order('created_at', { ascending: false }),
+      loadMyApplications(token),
+    ]).then(([jobsRes, empRes]) => {
+      if (jobsRes.data) setJobs(jobsRes.data);
+      if (empRes.data) setEmployers(empRes.data);
+      setLoading(false);
+    });
+  }, [user, token, navigate]);
+
+  const appliedJobIds = new Set(myApplications.map((a) => a.job_post_id));
 
   const filteredJobs = jobs.filter((job) => {
     if (locationFilter.province && job.province !== locationFilter.province) return false;
     if (locationFilter.district && job.district !== locationFilter.district) return false;
     if (locationFilter.locality && job.locality !== locationFilter.locality) return false;
 
-    if (
-      selectedIndustries.length > 0 &&
-      !selectedIndustries.includes(job.industry)
-    ) {
+    if (selectedIndustries.length > 0 && !selectedIndustries.includes(job.industry)) {
       return false;
     }
 
@@ -98,11 +118,25 @@ export const JobsDirectoryPage: React.FC = () => {
     return true;
   });
 
-  const handleApply = async (job: any) => {
-    if (!user || !token) {
-      navigate('/ingresar?rol=candidate');
-      return;
+  const filteredEmployers = employers.filter((emp) => {
+    if (locationFilter.province && emp.province !== locationFilter.province) return false;
+    if (locationFilter.district && emp.district !== locationFilter.district) return false;
+    if (locationFilter.locality && emp.locality !== locationFilter.locality) return false;
+
+    if (selectedIndustries.length > 0 && !selectedIndustries.includes(emp.industry)) {
+      return false;
     }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const text = `${emp.trade_name || ''} ${emp.industry || ''} ${emp.description || ''}`.toLowerCase();
+      if (!text.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const handleApply = async (job: any) => {
+    if (!user || !token) return;
 
     setApplying(true);
     setApplyStatus(null);
@@ -123,7 +157,26 @@ export const JobsDirectoryPage: React.FC = () => {
         });
       }
 
+      await loadMyApplications(token);
       setApplyStatus('¡Te postulaste con éxito! El comercio ya puede ver tu perfil y CV.');
+    } catch (err: any) {
+      setApplyStatus(`Error: ${err.message}`);
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const handleCancelApplication = async (jobPostId: string) => {
+    if (!token) return;
+    setApplying(true);
+    try {
+      const { error } = await supabase.rpc('candidate_cancel_application', {
+        p_token: token,
+        p_job_post_id: jobPostId,
+      });
+      if (error) throw new Error(error.message);
+      await loadMyApplications(token);
+      setApplyStatus('Postulación cancelada.');
     } catch (err: any) {
       setApplyStatus(`Error: ${err.message}`);
     } finally {
@@ -133,113 +186,278 @@ export const JobsDirectoryPage: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
-          Búsquedas Laborales Activas
-        </h1>
-        <p className="text-sm text-slate-600 mt-1">
-          Filtrá por Provincia, Partido y Ciudad/Localidad, o tocando los botones de rubro y horario.
-        </p>
-      </div>
-
-      {/* Panel de Filtros con Buscador + 3 Selects encadenados + Chips */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-5">
-        <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por puesto, oficio o nombre del comercio..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-brand-600 focus:outline-none"
-          />
-        </div>
-
-        <LocationSelector
-          value={locationFilter}
-          onChange={setLocationFilter}
-          allowAllOption={true}
-        />
-
-        <ChipSelector
-          label="Rubro / Actividad"
-          options={industriesCatalog.map((i) => i.name)}
-          selected={selectedIndustries}
-          onChange={setSelectedIndustries}
-        />
-
-        <ChipSelector
-          label="Disponibilidad Horaria"
-          options={AVAILABILITY_OPTIONS}
-          selected={selectedAvailability}
-          onChange={setSelectedAvailability}
-        />
-      </div>
-
-      {loading ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
-          Cargando búsquedas laborales...
-        </div>
-      ) : filteredJobs.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-2">
-          <Briefcase className="w-10 h-10 text-brand-600 mx-auto" />
-          <h2 className="text-lg font-bold text-slate-900">
-            No hay búsquedas con estos filtros en este momento
-          </h2>
-          <p className="text-sm text-slate-600 max-w-md mx-auto">
-            Probá quitando algún filtro o cambiando la localidad seleccionada.
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
+            Búsquedas Laborales y Comercios
+          </h1>
+          <p className="text-sm text-slate-600 mt-1">
+            Explorá vacantes activas, conocé los comercios registrados y gestioná tus postulaciones.
           </p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredJobs.map((job) => (
-            <div
-              key={job.id}
-              onClick={() => {
-                setSelectedJob(job);
-                setApplyStatus(null);
-              }}
-              className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-brand-400 transition-all cursor-pointer flex flex-col justify-between gap-4"
-            >
-              <div className="space-y-2.5">
+      </div>
+
+      {/* Pestañas: Búsquedas Activas | Comercios Registrados | Mis Postulaciones */}
+      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveView('jobs')}
+          className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+            activeView === 'jobs'
+              ? 'bg-brand-600 text-white'
+              : 'bg-white text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Briefcase className="w-4 h-4" />
+          <span>Búsquedas Laborales ({jobs.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveView('employers')}
+          className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+            activeView === 'employers'
+              ? 'bg-slate-900 text-white'
+              : 'bg-white text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          <span>Comercios Registrados ({employers.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveView('my_applications')}
+          className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+            activeView === 'my_applications'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-white text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          <span>Mis Postulaciones ({myApplications.length})</span>
+        </button>
+      </div>
+
+      {/* Panel de Filtros (para Búsquedas y Comercios) */}
+      {activeView !== 'my_applications' && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-5">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por puesto, oficio o nombre del comercio..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-brand-600 focus:outline-none"
+            />
+          </div>
+
+          <LocationSelector
+            value={locationFilter}
+            onChange={setLocationFilter}
+            allowAllOption={true}
+          />
+
+          <ChipSelector
+            label="Rubro / Actividad"
+            options={industriesCatalog.map((i) => i.name)}
+            selected={selectedIndustries}
+            onChange={setSelectedIndustries}
+          />
+
+          {activeView === 'jobs' && (
+            <ChipSelector
+              label="Disponibilidad Horaria"
+              options={AVAILABILITY_OPTIONS}
+              selected={selectedAvailability}
+              onChange={setSelectedAvailability}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Contenido según pestaña */}
+      {loading ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
+          Cargando información...
+        </div>
+      ) : activeView === 'jobs' ? (
+        filteredJobs.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-2">
+            <Briefcase className="w-10 h-10 text-brand-600 mx-auto" />
+            <h2 className="text-lg font-bold text-slate-900">
+              No hay búsquedas con estos filtros en este momento
+            </h2>
+            <p className="text-sm text-slate-600 max-w-md mx-auto">
+              Probá quitando algún filtro o mirá la pestaña de Comercios Registrados.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredJobs.map((job) => {
+              const isApplied = appliedJobIds.has(job.id);
+              return (
+                <div
+                  key={job.id}
+                  onClick={() => {
+                    setSelectedJob(job);
+                    setApplyStatus(null);
+                  }}
+                  className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-brand-400 transition-all cursor-pointer flex flex-col justify-between gap-4"
+                >
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-brand-700 bg-brand-50 px-2.5 py-0.5 rounded-full">
+                        {job.industry}
+                      </span>
+                      {isApplied && (
+                        <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                          ✓ Ya te postulaste
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                        {job.employer_profiles?.logo_url ? (
+                          <img
+                            src={job.employer_profiles.logo_url}
+                            alt={job.employer_profiles.trade_name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Building2 className="w-5 h-5 text-slate-400" />
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900">{job.title}</h3>
+                        <p className="text-xs text-slate-500">
+                          {job.employer_profiles?.trade_name || 'Comercio local'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-600 line-clamp-2">{job.description}</p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-brand-600" />
+                      {job.locality}, {job.district}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      {(job.availability || []).slice(0, 2).join(' · ')}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      ) : activeView === 'employers' ? (
+        filteredEmployers.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-2">
+            <Building2 className="w-10 h-10 text-slate-400 mx-auto" />
+            <h2 className="text-lg font-bold text-slate-900">
+              No se encontraron comercios con estos filtros
+            </h2>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredEmployers.map((emp) => (
+              <div
+                key={emp.id}
+                onClick={() => setSelectedEmployer(emp)}
+                className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-brand-400 transition-all cursor-pointer space-y-3"
+              >
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
-                    {job.employer_profiles?.logo_url ? (
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                    {emp.logo_url ? (
                       <img
-                        src={job.employer_profiles.logo_url}
-                        alt={job.employer_profiles.trade_name}
+                        src={emp.logo_url}
+                        alt={emp.trade_name}
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <Building2 className="w-5 h-5 text-slate-400" />
+                      <Building2 className="w-6 h-6 text-slate-400" />
                     )}
                   </div>
                   <div>
-                    <span className="text-xs font-semibold text-brand-700 bg-brand-50 px-2.5 py-0.5 rounded-full">
-                      {job.industry}
+                    <span className="text-[11px] font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full">
+                      {emp.industry}
                     </span>
-                    <h3 className="text-base font-bold text-slate-900 mt-1">{job.title}</h3>
-                    <p className="text-xs text-slate-500">
-                      {job.employer_profiles?.trade_name || 'Comercio local'}
+                    <h3 className="font-bold text-slate-900 text-base mt-1">{emp.trade_name}</h3>
+                    <p className="text-xs text-slate-500 flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-brand-600" />
+                      {emp.locality}, {emp.district}
                     </p>
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-600 line-clamp-2">{job.description}</p>
+                {emp.description && (
+                  <p className="text-xs text-slate-600 line-clamp-2">{emp.description}</p>
+                )}
               </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
-                <span className="inline-flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-brand-600" />
-                  {job.locality}, {job.district}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  {(job.availability || []).slice(0, 2).join(' · ')}
-                </span>
-              </div>
+            ))}
+          </div>
+        )
+      ) : (
+        /* Pestaña Mis Postulaciones */
+        <div className="space-y-3">
+          {myApplications.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-2">
+              <Briefcase className="w-10 h-10 text-slate-400 mx-auto" />
+              <h2 className="text-lg font-bold text-slate-900">
+                Todavía no te postulaste a ninguna búsqueda
+              </h2>
+              <p className="text-sm text-slate-600">
+                Entrá a la pestaña de Búsquedas Laborales, tocá un aviso y presioná "Postularme".
+              </p>
             </div>
-          ))}
+          ) : (
+            myApplications.map((app) => (
+              <div
+                key={app.application_id}
+                className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        app.status === 'shortlisted'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : app.status === 'rejected'
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {app.status === 'shortlisted'
+                        ? 'Preseleccionado por el comercio'
+                        : app.status === 'rejected'
+                        ? 'No seleccionado'
+                        : 'Postulación enviada'}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {app.locality}, {app.district}
+                    </span>
+                  </div>
+                  <h3 className="font-bold text-slate-900">{app.job_title}</h3>
+                  <p className="text-xs text-slate-600">{app.trade_name}</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleCancelApplication(app.job_post_id)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold self-start sm:self-center"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Cancelar postulación</span>
+                </button>
+              </div>
+            ))
+          )}
         </div>
       )}
 
@@ -301,15 +519,106 @@ export const JobsDirectoryPage: React.FC = () => {
               >
                 Cerrar
               </button>
+
+              {appliedJobIds.has(selectedJob.id) ? (
+                <button
+                  type="button"
+                  disabled={applying}
+                  onClick={() => handleCancelApplication(selectedJob.id)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold shadow-sm"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Cancelar mi postulación</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={applying}
+                  onClick={() => handleApply(selectedJob)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold shadow-sm"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>{applying ? 'Enviando...' : 'Postularme a esta búsqueda'}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pop-up de detalle del Comercio Registrado */}
+      {selectedEmployer && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3.5">
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                  {selectedEmployer.logo_url ? (
+                    <img
+                      src={selectedEmployer.logo_url}
+                      alt={selectedEmployer.trade_name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Building2 className="w-7 h-7 text-slate-400" />
+                  )}
+                </div>
+                <div>
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-700">
+                    {selectedEmployer.industry}
+                  </span>
+                  <h2 className="text-xl font-bold text-slate-900 mt-1">
+                    {selectedEmployer.trade_name}
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    {selectedEmployer.locality}, {selectedEmployer.district} (
+                    {selectedEmployer.province})
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
-                disabled={applying}
-                onClick={() => handleApply(selectedJob)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold shadow-sm"
+                onClick={() => setSelectedEmployer(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
               >
-                <Send className="w-4 h-4" />
-                <span>{applying ? 'Enviando...' : 'Postularme a esta búsqueda'}</span>
+                <X className="w-5 h-5" />
               </button>
+            </div>
+
+            {selectedEmployer.description && (
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-700 whitespace-pre-line">
+                {selectedEmployer.description}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Búsquedas activas de este comercio
+              </p>
+              {jobs.filter((j) => j.employer_id === selectedEmployer.id).length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  Actualmente no tiene búsquedas abiertas.
+                </p>
+              ) : (
+                jobs
+                  .filter((j) => j.employer_id === selectedEmployer.id)
+                  .map((job) => (
+                    <div
+                      key={job.id}
+                      onClick={() => {
+                        setSelectedEmployer(null);
+                        setSelectedJob(job);
+                      }}
+                      className="p-3 rounded-xl border border-slate-200 hover:border-brand-500 cursor-pointer flex items-center justify-between"
+                    >
+                      <div>
+                        <p className="font-bold text-sm text-slate-900">{job.title}</p>
+                        <p className="text-xs text-slate-500">{job.locality}</p>
+                      </div>
+                      <span className="text-xs font-bold text-brand-600">Ver búsqueda →</span>
+                    </div>
+                  ))
+              )}
             </div>
           </div>
         </div>

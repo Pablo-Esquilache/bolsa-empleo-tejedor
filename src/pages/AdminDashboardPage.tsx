@@ -68,9 +68,10 @@ export const AdminDashboardPage: React.FC = () => {
     item: any;
   } | null>(null);
 
-  // Nuevo rubro / puestos
+  // Nuevo rubro / puestos y suma rápida de puesto en cada tarjeta
   const [newIndustryName, setNewIndustryName] = useState('');
   const [newIndustryPositions, setNewIndustryPositions] = useState('');
+  const [quickPosByInd, setQuickPosByInd] = useState<Record<string, string>>({});
 
   const isAdmin =
     Boolean(token && user) &&
@@ -201,6 +202,50 @@ export const AdminDashboardPage: React.FC = () => {
     setNewIndustryName('');
     setNewIndustryPositions('');
     await fetchAdminData(token);
+  };
+
+  const handleAddPositionToIndustry = async (ind: IndustryItem) => {
+    const newPos = (quickPosByInd[ind.id] || '').trim();
+    if (!token || !newPos) return;
+
+    const updatedPositions = Array.from(new Set([...(ind.suggested_positions || []), newPos]));
+    const { error } = await supabase.rpc('admin_upsert_industry', {
+      p_token: token,
+      p_name: ind.name,
+      p_positions: updatedPositions,
+    });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setQuickPosByInd((prev) => ({ ...prev, [ind.id]: '' }));
+    await fetchAdminData(token);
+  };
+
+  const handleRemovePositionFromIndustry = async (ind: IndustryItem, posToRemove: string) => {
+    if (!token) return;
+    const updatedPositions = (ind.suggested_positions || []).filter((p) => p !== posToRemove);
+    const { error } = await supabase.rpc('admin_upsert_industry', {
+      p_token: token,
+      p_name: ind.name,
+      p_positions: updatedPositions,
+    });
+    if (!error) {
+      await fetchAdminData(token);
+    }
+  };
+
+  const handleDeleteIndustry = async (indId: string) => {
+    if (!token || !window.confirm('¿Seguro que querés eliminar este rubro?')) return;
+    const { error } = await supabase.rpc('admin_delete_industry', {
+      p_token: token,
+      p_industry_id: indId,
+    });
+    if (!error) {
+      await fetchAdminData(token);
+    }
   };
 
   if (!isAdmin) {
@@ -356,6 +401,17 @@ export const AdminDashboardPage: React.FC = () => {
     candidates.filter((c) => c.account_status === 'paused').length +
     employers.filter((e) => e.account_status === 'paused').length +
     jobs.filter((j) => j.status === 'paused').length;
+
+  const customOtherSuggestions = Array.from(
+    new Set(
+      [
+        ...candidates.map((c) => c.custom_other_text),
+        ...jobs.map((j) => j.custom_other_text),
+      ]
+        .map((s) => (s || '').trim())
+        .filter(Boolean)
+    )
+  );
 
   return (
     <div className="space-y-6">
@@ -624,12 +680,30 @@ export const AdminDashboardPage: React.FC = () => {
       ) : (
         /* Pestaña Gestor de Rubros y Actividades */
         <div className="space-y-6">
+          {customOtherSuggestions.length > 0 && (
+            <div className="bg-amber-50 rounded-2xl border border-amber-200 p-4 space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-900">
+                Sugerencias escritas por usuarios en el botón "Otro":
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {customOtherSuggestions.map((sug) => (
+                  <span
+                    key={sug}
+                    className="px-3 py-1 rounded-full bg-white border border-amber-300 text-xs font-semibold text-amber-950"
+                  >
+                    {sug}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <form
             onSubmit={handleSaveIndustry}
             className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4"
           >
             <h2 className="text-lg font-bold text-slate-900">
-              Incorporar o Actualizar Rubro y Puestos Sugeridos
+              Crear Nuevo Rubro con Puestos Sugeridos
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -663,7 +737,7 @@ export const AdminDashboardPage: React.FC = () => {
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold"
             >
               <Plus className="w-4 h-4" />
-              <span>Guardar Rubro</span>
+              <span>Guardar Nuevo Rubro</span>
             </button>
           </form>
 
@@ -671,18 +745,58 @@ export const AdminDashboardPage: React.FC = () => {
             {industriesCatalog.map((ind) => (
               <div
                 key={ind.id}
-                className="bg-white rounded-2xl border border-slate-200 p-5 space-y-2"
+                className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3 flex flex-col justify-between"
               >
-                <h3 className="font-bold text-slate-900 text-sm">{ind.name}</h3>
-                <div className="flex flex-wrap gap-1.5">
-                  {(ind.suggested_positions || []).map((pos) => (
-                    <span
-                      key={pos}
-                      className="px-2.5 py-1 rounded-lg bg-slate-100 text-xs text-slate-700"
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-bold text-slate-900 text-sm">{ind.name}</h3>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteIndustry(ind.id)}
+                      className="text-xs text-rose-600 hover:underline font-semibold"
                     >
-                      {pos}
-                    </span>
-                  ))}
+                      Eliminar rubro
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {(ind.suggested_positions || []).map((pos) => (
+                      <span
+                        key={pos}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-xs text-slate-700"
+                      >
+                        <span>{pos}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePositionFromIndustry(ind, pos)}
+                          className="text-slate-400 hover:text-rose-600 font-bold ml-1"
+                          title="Quitar puesto"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sumar puesto rápido a este rubro */}
+                <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={quickPosByInd[ind.id] || ''}
+                    onChange={(e) =>
+                      setQuickPosByInd((prev) => ({ ...prev, [ind.id]: e.target.value }))
+                    }
+                    placeholder="Agregar oficio/puesto a este rubro..."
+                    className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs focus:border-brand-600 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddPositionToIndustry(ind)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shrink-0"
+                  >
+                    + Sumar
+                  </button>
                 </div>
               </div>
             ))}

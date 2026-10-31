@@ -51,7 +51,6 @@ export const CandidateProfilePage: React.FC = () => {
       return;
     }
 
-    // Cargar catálogo de rubros desde Supabase
     supabase
       .from('industries')
       .select('*')
@@ -61,36 +60,34 @@ export const CandidateProfilePage: React.FC = () => {
         if (data && data.length > 0) setIndustriesCatalog(data as IndustryItem[]);
       });
 
-    // Cargar perfil existente del postulante si ya lo había completado
-    supabase
-      .from('candidate_profiles')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setFirstName(data.first_name || '');
-          setLastName(data.last_name || '');
-          setLocation({
-            province: data.province || 'Buenos Aires',
-            district: data.district || 'Carlos Tejedor',
-            locality: data.locality || 'Carlos Tejedor',
-          });
-          setWorkSituation((data.work_situation as WorkSituation) || 'seeking_job');
-          setAvailability(data.availability || []);
-          setEducationLevel(data.education_level || 'Secundario completo');
-          setSelectedIndustries(data.industries || []);
-          setSelectedPositions(data.positions || []);
-          setOtherText(data.custom_other_text || '');
-          setBioShort(data.bio_short || '');
-          setAvatarUrl(data.avatar_url || null);
-          setCvPath(data.cv_path || null);
-          setIsSearching(data.is_searching ?? true);
-        }
-      });
+    supabase.rpc('get_my_candidate_data', { p_token: token }).then(({ data }) => {
+      if (data?.profile) {
+        const p = data.profile;
+        setFirstName(p.first_name || '');
+        setLastName(p.last_name || '');
+        setLocation({
+          province: p.province || 'Buenos Aires',
+          district: p.district || 'Carlos Tejedor',
+          locality: p.locality || 'Carlos Tejedor',
+        });
+        setWorkSituation((p.work_situation as WorkSituation) || 'seeking_job');
+        setAvailability(p.availability || []);
+        setEducationLevel(p.education_level || 'Secundario completo');
+        setSelectedIndustries(p.industries || []);
+        setSelectedPositions(p.positions || []);
+        setOtherText(p.custom_other_text || '');
+        setBioShort(p.bio_short || '');
+        setAvatarUrl(p.avatar_url || null);
+        setCvPath(p.cv_path || null);
+        setIsSearching(p.is_searching ?? true);
+      }
+      if (data?.private) {
+        setPhone(data.private.phone || '');
+        setBirthDate(data.private.birth_date || '');
+      }
+    });
   }, [user, token, navigate]);
 
-  // Calcular puestos sugeridos según los rubros cliqueados
   const availablePositions = Array.from(
     new Set(
       industriesCatalog
@@ -117,10 +114,6 @@ export const CandidateProfilePage: React.FC = () => {
 
       const { data: pub } = supabase.storage.from('avatars_and_logos').getPublicUrl(filePath);
       setAvatarUrl(pub.publicUrl);
-      setMessage({
-        type: 'ok',
-        text: `Foto comprimida a WebP (${Math.round(compressed.size / 1024)} KB) y subida con éxito.`,
-      });
     } catch (err: any) {
       setMessage({ type: 'err', text: err.message || 'Error al subir la foto.' });
     } finally {
@@ -149,7 +142,7 @@ export const CandidateProfilePage: React.FC = () => {
 
       const { data: pub } = supabase.storage.from('cvs').getPublicUrl(filePath);
       setCvPath(pub.publicUrl);
-      setMessage({ type: 'ok', text: 'Currículum Vitae en PDF validado y subido con éxito.' });
+      setMessage({ type: 'ok', text: 'Currículum Vitae en PDF subido con éxito.' });
     } catch (err: any) {
       setMessage({ type: 'err', text: err.message || 'Error al subir el CV.' });
     } finally {
@@ -204,10 +197,8 @@ export const CandidateProfilePage: React.FC = () => {
 
       if (error) throw new Error(error.message);
 
-      setMessage({
-        type: 'ok',
-        text: '¡Tu perfil de postulante quedó guardado y activo en el directorio!',
-      });
+      // Apenas guarda el perfil, lo lleva directo a Búsquedas Laborales y Comercios
+      navigate('/vacantes');
     } catch (err: any) {
       setMessage({ type: 'err', text: err.message || 'Error al guardar el perfil.' });
     } finally {
@@ -233,7 +224,7 @@ export const CandidateProfilePage: React.FC = () => {
             className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500"
           />
           <span className="text-sm font-semibold text-slate-800">
-            {isSearching ? '🟢 Mi perfil está visible' : '⏸️ Búsqueda en pausa'}
+            {isSearching ? '🟢 Mi perfil está activo' : '⏸️ Mi perfil está pausado'}
           </span>
         </label>
       </div>
@@ -256,7 +247,7 @@ export const CandidateProfilePage: React.FC = () => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* 1. Datos Personales y Foto Comprimida */}
+        {/* 1. Datos Personales y Foto */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
           <h2 className="text-lg font-bold text-slate-900">1. Datos Personales y Foto</h2>
 
@@ -269,10 +260,10 @@ export const CandidateProfilePage: React.FC = () => {
               )}
             </div>
 
-            <div className="space-y-1.5">
+            <div>
               <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold cursor-pointer transition-colors">
                 <Camera className="w-4 h-4" />
-                <span>{uploadingPhoto ? 'Comprimiendo y subiendo...' : 'Subir Foto de Perfil'}</span>
+                <span>{uploadingPhoto ? 'Subiendo foto...' : 'Subir Foto de Perfil'}</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -280,9 +271,6 @@ export const CandidateProfilePage: React.FC = () => {
                   className="hidden"
                 />
               </label>
-              <p className="text-xs text-slate-500">
-                Se comprime automáticamente a tamaño liviano (WebP 512px) antes de subir.
-              </p>
             </div>
           </div>
 
@@ -444,7 +432,7 @@ export const CandidateProfilePage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-4">
             <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 border border-brand-200 text-sm font-semibold cursor-pointer transition-colors">
               <FileText className="w-4 h-4" />
-              <span>{uploadingCv ? 'Validando y subiendo PDF...' : 'Subir CV en formato PDF'}</span>
+              <span>{uploadingCv ? 'Subiendo PDF...' : 'Subir CV en formato PDF'}</span>
               <input
                 type="file"
                 accept="application/pdf,.pdf"
@@ -476,7 +464,7 @@ export const CandidateProfilePage: React.FC = () => {
           className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-bold text-base shadow-md transition-colors"
         >
           <Save className="w-5 h-5" />
-          <span>{saving ? 'Guardando perfil...' : 'Guardar y Publicar mi Perfil'}</span>
+          <span>{saving ? 'Guardando perfil...' : 'Guardar Perfil e Ir a Búsquedas Laborales'}</span>
         </button>
       </form>
     </div>

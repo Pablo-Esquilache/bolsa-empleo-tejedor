@@ -91,10 +91,19 @@ export const LoginPage: React.FC = () => {
 
       setSession(data.token, data.user);
 
+      // Si ya tenía el perfil/comercio cargado, va directo al directorio; si es nuevo, va a cargarlo
       if (data.user.role === 'employer') {
-        navigate('/mi-comercio');
+        if (data.has_completed_profile) {
+          navigate('/postulantes');
+        } else {
+          navigate('/mi-comercio');
+        }
       } else {
-        navigate('/mi-perfil');
+        if (data.has_completed_profile) {
+          navigate('/vacantes');
+        } else {
+          navigate('/mi-perfil');
+        }
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Código inválido o vencido.');
