@@ -15,6 +15,7 @@ import {
   X,
   KeyRound,
   Mail,
+  RotateCcw,
 } from 'lucide-react';
 import {
   AVAILABILITY_OPTIONS,
@@ -105,6 +106,15 @@ export const AdminDashboardPage: React.FC = () => {
       fetchAdminData(token);
     }
   }, [isAdmin, token]);
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setLocationFilter({ province: '', district: '', locality: '' });
+    setSelectedSituations([]);
+    setSelectedIndustries([]);
+    setSelectedAvailability([]);
+    setSelectedEducation([]);
+  };
 
   const handleAdminSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -471,7 +481,7 @@ export const AdminDashboardPage: React.FC = () => {
               : 'bg-white text-slate-700 hover:bg-slate-200'
           }`}
         >
-          Postulantes Inscritos ({candidates.length})
+          Postulantes Inscritos ({filteredCandidates.length})
         </button>
 
         <button
@@ -483,7 +493,7 @@ export const AdminDashboardPage: React.FC = () => {
               : 'bg-white text-slate-700 hover:bg-slate-200'
           }`}
         >
-          Comercios Inscritos ({employers.length})
+          Comercios Inscritos ({filteredEmployers.length})
         </button>
 
         <button
@@ -495,7 +505,7 @@ export const AdminDashboardPage: React.FC = () => {
               : 'bg-white text-slate-700 hover:bg-slate-200'
           }`}
         >
-          Búsquedas Laborales ({jobs.length})
+          Búsquedas Laborales ({filteredJobs.length})
         </button>
 
         <button
@@ -512,172 +522,7 @@ export const AdminDashboardPage: React.FC = () => {
         </button>
       </div>
 
-      {/* 3. Buscador y Filtros Cliqueables del Administrador */}
-      {activeTab !== 'industries' && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar por nombre, comercio, responsable, teléfono, email o puesto..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-brand-600 focus:outline-none"
-            />
-          </div>
-
-          <LocationSelector
-            value={locationFilter}
-            onChange={setLocationFilter}
-            allowAllOption={true}
-          />
-
-          <ChipSelector
-            label="Filtrar por Rubro"
-            options={industriesCatalog.map((i) => i.name)}
-            selected={selectedIndustries}
-            onChange={setSelectedIndustries}
-          />
-
-          {activeTab === 'candidates' && (
-            <>
-              <ChipSelector
-                label="Situación Laboral"
-                options={WORK_SITUATIONS.map((w) => w.label)}
-                selected={selectedSituations}
-                onChange={setSelectedSituations}
-              />
-
-              <ChipSelector
-                label="Disponibilidad Horaria"
-                options={AVAILABILITY_OPTIONS}
-                selected={selectedAvailability}
-                onChange={setSelectedAvailability}
-              />
-
-              <ChipSelector
-                label="Nivel de Formación"
-                options={EDUCATION_LEVELS}
-                selected={selectedEducation}
-                onChange={setSelectedEducation}
-              />
-            </>
-          )}
-        </div>
-      )}
-
-      {/* 4. Listado de Tarjetas según Pestaña */}
-      {loadingData ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
-          Cargando base de datos...
-        </div>
-      ) : activeTab === 'candidates' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCandidates.map((cand) => (
-            <div
-              key={cand.id}
-              onClick={() => setDetailModal({ type: 'candidate', item: cand })}
-              className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-brand-500 cursor-pointer transition-all space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                    cand.account_status === 'active'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-rose-100 text-rose-800'
-                  }`}
-                >
-                  {cand.account_status === 'active' ? 'Activo' : 'Pausado'}
-                </span>
-                {cand.cv_path && (
-                  <span className="text-xs font-semibold text-brand-700 inline-flex items-center gap-1">
-                    <FileText className="w-3.5 h-3.5" /> Con CV
-                  </span>
-                )}
-              </div>
-
-              <div>
-                <h3 className="font-bold text-slate-900">
-                  {cand.first_name} {cand.last_name}
-                </h3>
-                <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                  <MapPin className="w-3.5 h-3.5" />
-                  {cand.locality}, {cand.district}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-1">
-                {(cand.industries || []).slice(0, 3).map((ind: string) => (
-                  <span
-                    key={ind}
-                    className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px]"
-                  >
-                    {ind}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : activeTab === 'employers' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredEmployers.map((emp) => (
-            <div
-              key={emp.id}
-              onClick={() => setDetailModal({ type: 'employer', item: emp })}
-              className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-brand-500 cursor-pointer transition-all space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                    emp.account_status === 'active'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-rose-100 text-rose-800'
-                  }`}
-                >
-                  {emp.account_status === 'active' ? 'Activo' : 'Pausado'}
-                </span>
-                <span className="text-xs text-slate-500">{emp.jobs_count || 0} búsquedas</span>
-              </div>
-
-              <div>
-                <h3 className="font-bold text-slate-900">{emp.trade_name}</h3>
-                <p className="text-xs text-slate-600">{emp.industry}</p>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {emp.locality}, {emp.district}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : activeTab === 'jobs' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredJobs.map((job) => (
-            <div
-              key={job.id}
-              onClick={() => setDetailModal({ type: 'job', item: job })}
-              className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-brand-500 cursor-pointer transition-all space-y-2"
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                    job.status === 'active'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-rose-100 text-rose-800'
-                  }`}
-                >
-                  {job.status === 'active' ? 'Activa' : 'Pausada'}
-                </span>
-                <span className="text-xs text-slate-500">{job.trade_name}</span>
-              </div>
-              <h3 className="font-bold text-slate-900">{job.title}</h3>
-              <p className="text-xs text-slate-500">
-                {job.locality}, {job.district} · {job.industry}
-              </p>
-            </div>
-          ))}
-        </div>
-      ) : (
+      {activeTab === 'industries' ? (
         /* Pestaña Gestor de Rubros y Actividades */
         <div className="space-y-6">
           {customOtherSuggestions.length > 0 && (
@@ -779,7 +624,6 @@ export const AdminDashboardPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Sumar puesto rápido a este rubro */}
                 <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
                   <input
                     type="text"
@@ -800,6 +644,222 @@ export const AdminDashboardPage: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      ) : (
+        /* Diseño 20%-25% Filtros a la izquierda / 75%-80% Tarjetas una debajo de la otra a la derecha */
+        <div className="flex flex-col lg:flex-row items-start gap-6">
+          {/* Columna Izquierda (Filtros del Administrador) */}
+          <aside className="w-full lg:w-[24%] shrink-0 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-slate-900">Filtros</h2>
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Ver todos</span>
+              </button>
+            </div>
+
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar nombre, teléfono, mail..."
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:border-brand-600 focus:outline-none"
+              />
+            </div>
+
+            <LocationSelector
+              value={locationFilter}
+              onChange={setLocationFilter}
+              allowAllOption={true}
+              stacked={true}
+            />
+
+            <ChipSelector
+              label="Rubro"
+              options={industriesCatalog.map((i) => i.name)}
+              selected={selectedIndustries}
+              onChange={setSelectedIndustries}
+            />
+
+            {activeTab === 'candidates' && (
+              <>
+                <ChipSelector
+                  label="Situación Laboral"
+                  options={WORK_SITUATIONS.map((w) => w.label)}
+                  selected={selectedSituations}
+                  onChange={setSelectedSituations}
+                />
+
+                <ChipSelector
+                  label="Disponibilidad Horaria"
+                  options={AVAILABILITY_OPTIONS}
+                  selected={selectedAvailability}
+                  onChange={setSelectedAvailability}
+                />
+
+                <ChipSelector
+                  label="Nivel de Formación"
+                  options={EDUCATION_LEVELS}
+                  selected={selectedEducation}
+                  onChange={setSelectedEducation}
+                />
+              </>
+            )}
+          </aside>
+
+          {/* Columna Derecha (Tarjetas una debajo de la otra) */}
+          <div className="w-full lg:w-[76%] space-y-3">
+            {loadingData ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
+                Cargando base de datos...
+              </div>
+            ) : activeTab === 'candidates' ? (
+              filteredCandidates.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
+                  No se encontraron postulantes con estos filtros.
+                </div>
+              ) : (
+                filteredCandidates.map((cand) => (
+                  <div
+                    key={cand.id}
+                    onClick={() => setDetailModal({ type: 'candidate', item: cand })}
+                    className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-brand-500 cursor-pointer transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                            cand.account_status === 'active'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {cand.account_status === 'active' ? 'Activo' : 'Pausado'}
+                        </span>
+                        <h3 className="font-bold text-base text-slate-900">
+                          {cand.first_name} {cand.last_name}
+                        </h3>
+                        <span className="text-xs text-slate-500">({cand.email})</span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5">
+                        {(cand.industries || []).map((ind: string) => (
+                          <span
+                            key={ind}
+                            className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs"
+                          >
+                            {ind}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex sm:flex-col items-start sm:items-end justify-between gap-2 shrink-0 text-xs text-slate-500">
+                      <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                        <MapPin className="w-3.5 h-3.5 text-brand-600" />
+                        {cand.locality}, {cand.district}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {cand.cv_path && (
+                          <span className="text-xs font-semibold text-brand-700 inline-flex items-center gap-1">
+                            <FileText className="w-3.5 h-3.5" /> Con CV
+                          </span>
+                        )}
+                        <span className="px-3 py-1 rounded-xl bg-slate-100 text-slate-900 font-bold">
+                          Abrir ficha →
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )
+            ) : activeTab === 'employers' ? (
+              filteredEmployers.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
+                  No se encontraron comercios con estos filtros.
+                </div>
+              ) : (
+                filteredEmployers.map((emp) => (
+                  <div
+                    key={emp.id}
+                    onClick={() => setDetailModal({ type: 'employer', item: emp })}
+                    className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-brand-500 cursor-pointer transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                            emp.account_status === 'active'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {emp.account_status === 'active' ? 'Activo' : 'Pausado'}
+                        </span>
+                        <h3 className="font-bold text-base text-slate-900">{emp.trade_name}</h3>
+                      </div>
+                      <p className="text-xs text-slate-600">
+                        {emp.industry} · Responsable: {emp.contact_person_name || 'S/D'}
+                      </p>
+                    </div>
+
+                    <div className="flex sm:flex-col items-start sm:items-end justify-between gap-2 shrink-0 text-xs text-slate-500">
+                      <span>
+                        {emp.locality}, {emp.district}
+                      </span>
+                      <span className="px-3 py-1 rounded-xl bg-slate-100 text-slate-900 font-bold">
+                        {emp.jobs_count || 0} búsquedas · Ver →
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )
+            ) : filteredJobs.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
+                No se encontraron búsquedas con estos filtros.
+              </div>
+            ) : (
+              filteredJobs.map((job) => (
+                <div
+                  key={job.id}
+                  onClick={() => setDetailModal({ type: 'job', item: job })}
+                  className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-brand-500 cursor-pointer transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                          job.status === 'active'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        {job.status === 'active' ? 'Activa' : 'Pausada'}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-600">{job.trade_name}</span>
+                    </div>
+                    <h3 className="font-bold text-base text-slate-900">{job.title}</h3>
+                    <p className="text-xs text-slate-500">{job.industry}</p>
+                  </div>
+
+                  <div className="flex sm:flex-col items-start sm:items-end justify-between gap-2 shrink-0 text-xs text-slate-500">
+                    <span>
+                      {job.locality}, {job.district}
+                    </span>
+                    <span className="px-3 py-1 rounded-xl bg-slate-100 text-slate-900 font-bold">
+                      Moderar aviso →
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -863,7 +923,6 @@ export const AdminDashboardPage: React.FC = () => {
               )}
             </div>
 
-            {/* Acciones directas: Ver CV y Abrir WhatsApp */}
             <div className="flex flex-wrap gap-2">
               {detailModal.item.cv_path && (
                 <a
@@ -892,7 +951,6 @@ export const AdminDashboardPage: React.FC = () => {
               )}
             </div>
 
-            {/* Botones de Moderación Reactiva: Pausar / Reactivar y Eliminar */}
             <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
               {detailModal.type === 'job' ? (
                 <>

@@ -14,7 +14,6 @@ import {
   Users,
   FileText,
   MessageCircle,
-  XCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -28,11 +27,51 @@ import { LocationSelector, LocationValue } from '../components/ui/LocationSelect
 import { compressImageToWebP } from '../lib/imageCompression';
 import { IndustryItem } from '../types/database';
 
+type AppTrackingStatus = 'received' | 'in_review' | 'shortlisted' | 'hired' | 'rejected';
+
+const TRACKING_STATUS_OPTIONS: {
+  id: AppTrackingStatus;
+  label: string;
+  badgeClass: string;
+  activeBtnClass: string;
+}[] = [
+  {
+    id: 'received',
+    label: 'Recibida',
+    badgeClass: 'bg-blue-100 text-blue-800',
+    activeBtnClass: 'bg-blue-600 text-white border-blue-600',
+  },
+  {
+    id: 'in_review',
+    label: 'En revisión',
+    badgeClass: 'bg-amber-100 text-amber-900',
+    activeBtnClass: 'bg-amber-500 text-slate-950 border-amber-500',
+  },
+  {
+    id: 'shortlisted',
+    label: 'Preseleccionado',
+    badgeClass: 'bg-purple-100 text-purple-800',
+    activeBtnClass: 'bg-purple-600 text-white border-purple-600',
+  },
+  {
+    id: 'hired',
+    label: 'Confirmado / Contratado',
+    badgeClass: 'bg-emerald-100 text-emerald-800',
+    activeBtnClass: 'bg-emerald-600 text-white border-emerald-600',
+  },
+  {
+    id: 'rejected',
+    label: 'Descartado',
+    badgeClass: 'bg-rose-100 text-rose-800',
+    activeBtnClass: 'bg-rose-600 text-white border-rose-600',
+  },
+];
+
 export const EmployerDashboardPage: React.FC = () => {
   const { token, user } = useAuth();
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState<'profile' | 'new_job' | 'my_jobs'>('profile');
+  const [tab, setTab] = useState<'my_jobs' | 'new_job' | 'profile'>('my_jobs');
   const [industriesCatalog, setIndustriesCatalog] = useState<IndustryItem[]>(INITIAL_INDUSTRIES);
 
   // Datos del Comercio
@@ -66,7 +105,6 @@ export const EmployerDashboardPage: React.FC = () => {
 
   // Mis búsquedas + Postulantes recibidos
   const [myJobs, setMyJobs] = useState<any[]>([]);
-  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -114,6 +152,9 @@ export const EmployerDashboardPage: React.FC = () => {
         });
         setDescription(p.description || '');
         setLogoUrl(p.logo_url || null);
+      } else {
+        // Si todavía no cargó la ficha del comercio, abrir la pestaña de datos primero
+        setTab('profile');
       }
       if (data?.private) {
         setContactPersonName(data.private.contact_person_name || '');
@@ -185,7 +226,6 @@ export const EmployerDashboardPage: React.FC = () => {
 
       if (error) throw new Error(error.message);
 
-      // Al guardar los datos del comercio, lo redirige directo a Ver Postulantes
       navigate('/postulantes');
     } catch (err: any) {
       setMessage({ type: 'err', text: err.message || 'Error al guardar el comercio.' });
@@ -226,7 +266,6 @@ export const EmployerDashboardPage: React.FC = () => {
 
       if (error) throw new Error(error.message);
 
-      // Al publicar la búsqueda laboral, redirige directo a Ver Postulantes
       navigate('/postulantes');
     } catch (err: any) {
       setMessage({ type: 'err', text: err.message || 'Error al publicar la búsqueda.' });
@@ -260,7 +299,7 @@ export const EmployerDashboardPage: React.FC = () => {
 
   const handleApplicationDecision = async (
     applicationId: string,
-    nextStatus: 'shortlisted' | 'rejected'
+    nextStatus: AppTrackingStatus
   ) => {
     if (!token) return;
     const { error } = await supabase.rpc('employer_update_application_status', {
@@ -278,11 +317,11 @@ export const EmployerDashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Panel de Mi Comercio</h1>
         <p className="text-sm text-slate-600">
-          Gestioná los datos de tu comercio, tus búsquedas laborales y los postulantes anotados.
+          Seguimiento de tus búsquedas laborales, postulantes recibidos y ficha de tu comercio.
         </p>
       </div>
 
@@ -290,15 +329,15 @@ export const EmployerDashboardPage: React.FC = () => {
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
         <button
           type="button"
-          onClick={() => setTab('profile')}
+          onClick={() => setTab('my_jobs')}
           className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
-            tab === 'profile'
+            tab === 'my_jobs'
               ? 'bg-slate-900 text-white'
               : 'bg-white text-slate-700 hover:bg-slate-200'
           }`}
         >
-          <Building2 className="w-4 h-4" />
-          <span>Datos del Comercio</span>
+          <Briefcase className="w-4 h-4" />
+          <span>Mis Búsquedas y Seguimiento ({myJobs.length})</span>
         </button>
 
         <button
@@ -311,20 +350,20 @@ export const EmployerDashboardPage: React.FC = () => {
           }`}
         >
           <PlusCircle className="w-4 h-4" />
-          <span>Publicar Búsqueda Laboral</span>
+          <span>Publicar Nueva Búsqueda</span>
         </button>
 
         <button
           type="button"
-          onClick={() => setTab('my_jobs')}
+          onClick={() => setTab('profile')}
           className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
-            tab === 'my_jobs'
+            tab === 'profile'
               ? 'bg-slate-900 text-white'
               : 'bg-white text-slate-700 hover:bg-slate-200'
           }`}
         >
-          <Briefcase className="w-4 h-4" />
-          <span>Mis Búsquedas ({myJobs.length})</span>
+          <Building2 className="w-4 h-4" />
+          <span>Datos del Comercio</span>
         </button>
       </div>
 
@@ -343,6 +382,294 @@ export const EmployerDashboardPage: React.FC = () => {
           )}
           <span>{message.text}</span>
         </div>
+      )}
+
+      {tab === 'my_jobs' && (
+        <div className="space-y-5">
+          {myJobs.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3">
+              <Briefcase className="w-9 h-9 text-slate-400 mx-auto" />
+              <p className="text-sm font-semibold text-slate-800">
+                Todavía no publicaste búsquedas laborales.
+              </p>
+              <button
+                type="button"
+                onClick={() => setTab('new_job')}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-600 text-white text-xs font-bold"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Publicar mi primera búsqueda</span>
+              </button>
+            </div>
+          ) : (
+            myJobs.map((job) => {
+              const applicants: any[] = job.applicants || [];
+
+              return (
+                <div
+                  key={job.id}
+                  className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5"
+                >
+                  {/* Encabezado del aviso con botones Pausar / Reactivar / Eliminar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            job.status === 'active'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {job.status === 'active' ? 'Búsqueda Activa' : 'Búsqueda Pausada'}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {job.locality}, {job.district} · {job.industry}
+                        </span>
+                      </div>
+                      <h3 className="text-xl font-bold text-slate-900">{job.title}</h3>
+                      <p className="text-xs text-slate-600">{job.description}</p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      {job.status === 'active' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleJobAction(job.id, 'pause')}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold"
+                        >
+                          <PauseCircle className="w-4 h-4" />
+                          <span>Pausar aviso</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleJobAction(job.id, 'activate')}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-xs font-bold"
+                        >
+                          <PlayCircle className="w-4 h-4" />
+                          <span>Reactivar aviso</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleJobAction(job.id, 'delete')}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 text-xs font-bold"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Eliminar aviso</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Seguimiento directo de postulantes a la vista */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-brand-600" />
+                        <span>
+                          Seguimiento de Postulantes en esta búsqueda ({applicants.length})
+                        </span>
+                      </h4>
+                    </div>
+
+                    {applicants.length === 0 ? (
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500">
+                        Todavía no se postularon candidatos a este aviso. Cuando alguien se anote, aparecerá acá mismo para que le hagas el seguimiento.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {applicants.map((app) => {
+                          const currentStatus: AppTrackingStatus =
+                            app.application_status || 'received';
+                          const statusMeta =
+                            TRACKING_STATUS_OPTIONS.find((s) => s.id === currentStatus) ||
+                            TRACKING_STATUS_OPTIONS[0];
+
+                          return (
+                            <div
+                              key={app.application_id}
+                              className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3"
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-base text-slate-900">
+                                      {app.first_name} {app.last_name}
+                                    </span>
+                                    <span
+                                      className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${statusMeta.badgeClass}`}
+                                    >
+                                      Estado: {statusMeta.label}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-600 mt-0.5">
+                                    {app.locality}, {app.district} · {app.education_level} ·{' '}
+                                    {(app.availability || []).join(', ')}
+                                  </p>
+                                  {app.bio_short && (
+                                    <p className="text-xs text-slate-500 mt-1">{app.bio_short}</p>
+                                  )}
+                                </div>
+
+                                {/* Botones de CV y WhatsApp directo */}
+                                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                  {app.cv_path && (
+                                    <a
+                                      href={app.cv_path}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-800 hover:bg-slate-100"
+                                    >
+                                      <FileText className="w-3.5 h-3.5 text-brand-600" />
+                                      <span>Ver CV PDF</span>
+                                    </a>
+                                  )}
+
+                                  {app.phone && (
+                                    <a
+                                      href={`https://wa.me/549${app.phone}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                                    >
+                                      <MessageCircle className="w-3.5 h-3.5" />
+                                      <span>WhatsApp ({app.phone})</span>
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Botonera de los 5 estados de seguimiento */}
+                              <div className="pt-2 border-t border-slate-200/80 flex flex-wrap items-center gap-1.5">
+                                <span className="text-[11px] font-bold uppercase text-slate-500 mr-1">
+                                  Cambiar seguimiento:
+                                </span>
+                                {TRACKING_STATUS_OPTIONS.map((opt) => {
+                                  const isSelected = currentStatus === opt.id;
+                                  return (
+                                    <button
+                                      key={opt.id}
+                                      type="button"
+                                      onClick={() =>
+                                        handleApplicationDecision(app.application_id, opt.id)
+                                      }
+                                      className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                                        isSelected
+                                          ? opt.activeBtnClass
+                                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                                      }`}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {tab === 'new_job' && (
+        <form
+          onSubmit={handlePublishJob}
+          className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6"
+        >
+          <h2 className="text-lg font-bold text-slate-900">
+            Nueva Búsqueda Laboral (Se publica de inmediato)
+          </h2>
+
+          <div>
+            <label className="block text-sm font-semibold text-slate-800 mb-1">
+              Título de la búsqueda *
+            </label>
+            <input
+              type="text"
+              required
+              value={jobTitle}
+              onChange={(e) => setJobTitle(e.target.value)}
+              placeholder="Ej.: Buscamos Vendedor/a de mostrador o Tractorista con experiencia"
+              className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-brand-600 focus:outline-none"
+            />
+          </div>
+
+          <LocationSelector value={jobLocation} onChange={setJobLocation} />
+
+          <ChipSelector
+            label="Rubro de la Búsqueda *"
+            options={industriesCatalog.map((i) => i.name)}
+            selected={[jobIndustry]}
+            multiple={false}
+            onChange={(next) => {
+              if (next[0]) {
+                setJobIndustry(next[0]);
+                setJobPositionTag('');
+              }
+            }}
+          />
+
+          {suggestedPositionsForJob.length > 0 && (
+            <ChipSelector
+              label="Puesto / Oficio Buscado"
+              options={suggestedPositionsForJob}
+              selected={jobPositionTag ? [jobPositionTag] : []}
+              multiple={false}
+              allowOther={true}
+              otherValue={jobOtherText}
+              onOtherChange={setJobOtherText}
+              onChange={(next) => setJobPositionTag(next[0] || '')}
+            />
+          )}
+
+          <ChipSelector
+            label="Disponibilidad Horaria Requerida *"
+            options={AVAILABILITY_OPTIONS}
+            selected={jobAvailability}
+            onChange={setJobAvailability}
+          />
+
+          <ChipSelector
+            label="Nivel de Formación Mínimo"
+            options={EDUCATION_LEVELS}
+            selected={[jobEducation]}
+            multiple={false}
+            onChange={(next) => {
+              if (next[0]) setJobEducation(next[0]);
+            }}
+          />
+
+          <div>
+            <label className="block text-sm font-semibold text-slate-800 mb-1">
+              Detalle de tareas, horarios y requisitos *
+            </label>
+            <textarea
+              rows={4}
+              required
+              value={jobDescription}
+              onChange={(e) => setJobDescription(e.target.value)}
+              placeholder="Describí las tareas del puesto, días/horarios y qué valoran..."
+              className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-brand-600 focus:outline-none"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-sm transition-colors"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>{saving ? 'Publicando...' : 'Publicar Búsqueda e Ir a Ver Postulantes'}</span>
+          </button>
+        </form>
       )}
 
       {tab === 'profile' && (
@@ -464,282 +791,6 @@ export const EmployerDashboardPage: React.FC = () => {
             <span>{saving ? 'Guardando...' : 'Guardar Comercio e Ir a Ver Postulantes'}</span>
           </button>
         </form>
-      )}
-
-      {tab === 'new_job' && (
-        <form
-          onSubmit={handlePublishJob}
-          className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6"
-        >
-          <h2 className="text-lg font-bold text-slate-900">
-            Nueva Búsqueda Laboral (Se publica de inmediato)
-          </h2>
-
-          <div>
-            <label className="block text-sm font-semibold text-slate-800 mb-1">
-              Título de la búsqueda *
-            </label>
-            <input
-              type="text"
-              required
-              value={jobTitle}
-              onChange={(e) => setJobTitle(e.target.value)}
-              placeholder="Ej.: Buscamos Vendedor/a de mostrador o Tractorista con experiencia"
-              className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-brand-600 focus:outline-none"
-            />
-          </div>
-
-          <LocationSelector value={jobLocation} onChange={setJobLocation} />
-
-          <ChipSelector
-            label="Rubro de la Búsqueda *"
-            options={industriesCatalog.map((i) => i.name)}
-            selected={[jobIndustry]}
-            multiple={false}
-            onChange={(next) => {
-              if (next[0]) {
-                setJobIndustry(next[0]);
-                setJobPositionTag('');
-              }
-            }}
-          />
-
-          {suggestedPositionsForJob.length > 0 && (
-            <ChipSelector
-              label="Puesto / Oficio Buscado"
-              options={suggestedPositionsForJob}
-              selected={jobPositionTag ? [jobPositionTag] : []}
-              multiple={false}
-              allowOther={true}
-              otherValue={jobOtherText}
-              onOtherChange={setJobOtherText}
-              onChange={(next) => setJobPositionTag(next[0] || '')}
-            />
-          )}
-
-          <ChipSelector
-            label="Disponibilidad Horaria Requerida *"
-            options={AVAILABILITY_OPTIONS}
-            selected={jobAvailability}
-            onChange={setJobAvailability}
-          />
-
-          <ChipSelector
-            label="Nivel de Formación Mínimo"
-            options={EDUCATION_LEVELS}
-            selected={[jobEducation]}
-            multiple={false}
-            onChange={(next) => {
-              if (next[0]) setJobEducation(next[0]);
-            }}
-          />
-
-          <div>
-            <label className="block text-sm font-semibold text-slate-800 mb-1">
-              Detalle de tareas, horarios y requisitos *
-            </label>
-            <textarea
-              rows={4}
-              required
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-              placeholder="Describí las tareas del puesto, días/horarios y qué valoran..."
-              className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-brand-600 focus:outline-none"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-sm transition-colors"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>{saving ? 'Publicando...' : 'Publicar Búsqueda e Ir a Ver Postulantes'}</span>
-          </button>
-        </form>
-      )}
-
-      {tab === 'my_jobs' && (
-        <div className="space-y-4">
-          {myJobs.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-2">
-              <Briefcase className="w-8 h-8 text-slate-400 mx-auto" />
-              <p className="text-sm font-semibold text-slate-800">
-                Todavía no publicaste búsquedas laborales.
-              </p>
-            </div>
-          ) : (
-            myJobs.map((job) => {
-              const applicants: any[] = job.applicants || [];
-              const isExpanded = expandedJobId === job.id;
-
-              return (
-                <div
-                  key={job.id}
-                  className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                            job.status === 'active'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          {job.status === 'active' ? 'Activa' : 'Pausada'}
-                        </span>
-                        <span className="text-xs text-slate-500">
-                          {job.locality}, {job.district} · {job.industry}
-                        </span>
-                      </div>
-                      <h3 className="text-lg font-bold text-slate-900">{job.title}</h3>
-                      <p className="text-xs text-slate-600">{job.description}</p>
-                    </div>
-
-                    {/* Botones de gestión de la búsqueda */}
-                    <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setExpandedJobId(isExpanded ? null : job.id)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 border border-brand-200 text-xs font-bold"
-                      >
-                        <Users className="w-4 h-4" />
-                        <span>Postulantes anotados ({applicants.length})</span>
-                      </button>
-
-                      {job.status === 'active' ? (
-                        <button
-                          type="button"
-                          onClick={() => handleJobAction(job.id, 'pause')}
-                          className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold"
-                        >
-                          <PauseCircle className="w-4 h-4" />
-                          <span>Pausar</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleJobAction(job.id, 'activate')}
-                          className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-xs font-bold"
-                        >
-                          <PlayCircle className="w-4 h-4" />
-                          <span>Reactivar</span>
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => handleJobAction(job.id, 'delete')}
-                        className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 text-xs font-bold"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span>Eliminar</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Listado desplegable de postulantes anotados en este aviso */}
-                  {isExpanded && (
-                    <div className="pt-3 border-t border-slate-200 space-y-3">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Postulantes anotados en "{job.title}"
-                      </h4>
-
-                      {applicants.length === 0 ? (
-                        <p className="text-xs text-slate-500 py-2">
-                          Aún no se postularon vecinos a este aviso.
-                        </p>
-                      ) : (
-                        <div className="space-y-2.5">
-                          {applicants.map((app) => (
-                            <div
-                              key={app.application_id}
-                              className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                            >
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-sm text-slate-900">
-                                    {app.first_name} {app.last_name}
-                                  </span>
-                                  <span
-                                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                                      app.application_status === 'shortlisted'
-                                        ? 'bg-emerald-100 text-emerald-800'
-                                        : app.application_status === 'rejected'
-                                        ? 'bg-rose-100 text-rose-800'
-                                        : 'bg-blue-100 text-blue-800'
-                                    }`}
-                                  >
-                                    {app.application_status === 'shortlisted'
-                                      ? 'Confirmado / Preseleccionado'
-                                      : app.application_status === 'rejected'
-                                      ? 'Descartado'
-                                      : 'Recibido'}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-slate-600">
-                                  {app.locality} · {app.education_level} ·{' '}
-                                  {(app.availability || []).join(', ')}
-                                </p>
-                                {app.bio_short && (
-                                  <p className="text-xs text-slate-500">{app.bio_short}</p>
-                                )}
-                              </div>
-
-                              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                                {app.cv_path && (
-                                  <a
-                                    href={app.cv_path}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                                  >
-                                    <FileText className="w-3.5 h-3.5 text-brand-600" />
-                                    <span>Ver CV</span>
-                                  </a>
-                                )}
-
-                                {app.phone && (
-                                  <a
-                                    href={`https://wa.me/549${app.phone}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    onClick={() =>
-                                      handleApplicationDecision(app.application_id, 'shortlisted')
-                                    }
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
-                                  >
-                                    <MessageCircle className="w-3.5 h-3.5" />
-                                    <span>Confirmar y WhatsApp</span>
-                                  </a>
-                                )}
-
-                                {app.application_status !== 'rejected' && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleApplicationDecision(app.application_id, 'rejected')
-                                    }
-                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold"
-                                  >
-                                    <XCircle className="w-3.5 h-3.5" />
-                                    <span>Descartar</span>
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
       )}
     </div>
   );

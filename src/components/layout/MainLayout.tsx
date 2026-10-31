@@ -17,16 +17,14 @@ export const MainLayout: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <header className="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center">
-            <div>
-              <span className="font-extrabold text-slate-900 text-lg sm:text-xl leading-tight block">
-                {APP_NAME}
-              </span>
-              <span className="text-xs text-slate-500 hidden sm:block">
-                Carlos Tejedor y la región
-              </span>
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center text-white font-bold text-lg shadow-sm shrink-0">
+              BT
             </div>
+            <span className="font-bold text-slate-900 text-base sm:text-lg leading-tight">
+              {APP_NAME}
+            </span>
           </Link>
 
           <nav className="flex items-center gap-2 sm:gap-3">
@@ -100,7 +98,7 @@ export const MainLayout: React.FC = () => {
       </main>
 
       <footer className="bg-white border-t border-slate-200 py-6 mt-12">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <p>© {new Date().getFullYear()} {APP_NAME} — Conectando trabajo y comercios locales.</p>
           <p>Tus datos privados y teléfono están protegidos y solo se comparten con tu permiso.</p>
         </div>

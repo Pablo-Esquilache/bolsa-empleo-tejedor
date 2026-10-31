@@ -10,6 +10,7 @@ interface LocationSelectorProps {
   value: LocationValue;
   onChange: (next: LocationValue) => void;
   allowAllOption?: boolean;
+  stacked?: boolean;
 }
 
 interface GeorefItem {
@@ -62,6 +63,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
   value,
   onChange,
   allowAllOption = false,
+  stacked = false,
 }) => {
   const [provinces, setProvinces] = useState<GeorefItem[]>(FALLBACK_PROVINCES);
   const [districts, setDistricts] = useState<GeorefItem[]>([]);
@@ -79,9 +81,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           setProvinces(data.provincias);
         }
       })
-      .catch(() => {
-        // Usa el fallback local
-      });
+      .catch(() => {});
     return () => {
       mounted = false;
     };
@@ -172,10 +172,10 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
   }, [value.province, value.district]);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <div className={stacked ? 'space-y-3' : 'grid grid-cols-1 sm:grid-cols-3 gap-3'}>
       {/* SELECT 1: PROVINCIA */}
       <div>
-        <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+        <label className="block text-xs font-semibold text-slate-700 mb-1">
           Provincia
         </label>
         <select
@@ -187,7 +187,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
               locality: '',
             })
           }
-          className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm bg-white focus:border-brand-600 focus:outline-none"
+          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs sm:text-sm bg-white focus:border-brand-600 focus:outline-none"
         >
           <option value="">{allowAllOption ? 'Todas las provincias' : 'Seleccionar provincia...'}</option>
           {provinces.map((prov) => (
@@ -200,7 +200,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
 
       {/* SELECT 2: PARTIDO / DEPARTAMENTO */}
       <div>
-        <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+        <label className="block text-xs font-semibold text-slate-700 mb-1">
           Partido / Departamento
         </label>
         <select
@@ -213,7 +213,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
               locality: '',
             })
           }
-          className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:border-brand-600 focus:outline-none"
+          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs sm:text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:border-brand-600 focus:outline-none"
         >
           <option value="">
             {!value.province
@@ -234,7 +234,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
 
       {/* SELECT 3: CIUDAD / LOCALIDAD */}
       <div>
-        <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+        <label className="block text-xs font-semibold text-slate-700 mb-1">
           Ciudad / Localidad
         </label>
         <select
@@ -246,7 +246,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
               locality: e.target.value,
             })
           }
-          className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:border-brand-600 focus:outline-none"
+          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs sm:text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:border-brand-600 focus:outline-none"
         >
           <option value="">
             {!value.district
