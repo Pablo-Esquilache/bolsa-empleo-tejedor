@@ -1,15 +1,12 @@
 # Políticas de Seguridad — Bolsa de Empleo Tejedor
 
-1. **Row Level Security (RLS) Obligatorio:**
-   Todas las tablas del esquema `public` tienen RLS habilitado. Ningún dato privado (`candidate_private`, `employer_private`) se expone en consultas abiertas.
+1. **Acceso por Funciones RPC Autenticadas y RLS:**
+   Todas las tablas sensibles del esquema `public` tienen RLS habilitado y permisos directos revocados para `anon` y `authenticated`. Toda lectura y escritura pasa por funciones `SECURITY DEFINER` que validan el token de sesión (`get_session_profile`), el estado activo de la cuenta (`status = 'active'`) y el rol (`candidate`, `employer`, `admin`).
 
-2. **Protección Real del Panel `/admin`:**
-   Que la ruta `/admin` no tenga un botón visible en la barra pública es solo orden visual; la seguridad real reside en la validación `is_admin()` en las políticas RLS y funciones RPC de PostgreSQL.
+2. **Códigos OTP de 6 Dígitos en el Servidor:**
+   - El código se genera en el servidor (`gen_random_bytes`), se almacena únicamente su hash SHA-256 (`code_hash`), vence a los 10 minutos, admite un máximo de 5 intentos y se envía desde el backend (`/api/auth-request-otp`) sin viajar nunca al navegador.
+   - El envío de correos transaccionales (`/api/notify-event`) valida la sesión en base de datos, escapa contenido HTML y utiliza plantillas fijas en el servidor.
 
-3. **Archivos Seguros en Supabase Storage:**
-   - **Fotos y Logos (`avatars_and_logos`):** Redimensionados en el cliente a máximo `512x512 px` en formato WebP (50–150 KB), eliminando metadatos EXIF de ubicación antes de subir.
-   - **Currículum Vitae (`cvs`):** Bucket privado. Se valida tamaño máximo (5 MB), tipo MIME `application/pdf` y los primeros 5 bytes (`%PDF-`). Solo se accede mediante URL firmada temporal de 60 segundos cuando existe permiso (`contact_grants`), postulación activa o rol `admin`.
-
-4. **Variables de Entorno:**
-   - En el navegador (`VITE_*`) solo se exponen `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` y `VITE_APP_NAME`.
-   - Las claves privadas (`SUPABASE_SERVICE_ROLE_KEY`, `BREVO_API_KEY`) viven únicamente en el entorno seguro del servidor (Supabase / Netlify Functions).
+3. **Protección de Currículums (PDF) e Imágenes:**
+   - **Fotos y Logos:** Redimensionados y comprimidos a formato WebP eliminando metadatos EXIF y validando el esquema antes de guardar.
+   - **Currículum Vitae:** Validación de firma `%PDF-` y límite de 5 MB tanto en cliente como en servidor (`upload_candidate_cv`). La visualización (`/ver-cv/:candidateId`) exige sesión activa autorizada (`get_authorized_cv_file`).

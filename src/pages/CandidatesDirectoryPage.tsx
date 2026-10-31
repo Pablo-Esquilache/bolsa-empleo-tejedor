@@ -9,6 +9,7 @@ import {
   X,
   UserCheck,
   RotateCcw,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   AVAILABILITY_OPTIONS,
@@ -21,6 +22,7 @@ import { LocationSelector, LocationValue } from '../components/ui/LocationSelect
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { IndustryItem } from '../types/database';
+import { buildWhatsAppUrl, normalizeSearchText } from '../lib/emailService';
 
 export const CandidatesDirectoryPage: React.FC = () => {
   const { token, user } = useAuth();
@@ -32,21 +34,22 @@ export const CandidatesDirectoryPage: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState<LocationValue>({
-    province: 'Buenos Aires',
-    district: 'Carlos Tejedor',
+    province: '',
+    district: '',
     locality: '',
   });
   const [selectedSituations, setSelectedSituations] = useState<string[]>([]);
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
   const [selectedAvailability, setSelectedAvailability] = useState<string[]>([]);
   const [selectedEducation, setSelectedEducation] = useState<string[]>([]);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
   const [contactPhone, setContactPhone] = useState<string | null>(null);
   const [requestingContact, setRequestingContact] = useState(false);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !token) {
       navigate('/');
       return;
     }
@@ -55,25 +58,16 @@ export const CandidatesDirectoryPage: React.FC = () => {
       return;
     }
 
-    supabase
-      .from('industries')
-      .select('*')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true })
-      .then(({ data }) => {
-        if (data && data.length > 0) setIndustriesCatalog(data as IndustryItem[]);
-      });
-
-    supabase
-      .from('candidate_profiles')
-      .select('*')
-      .eq('is_searching', true)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (data) setCandidates(data);
-        setLoading(false);
-      });
-  }, [user, navigate]);
+    supabase.rpc('get_candidates_directory_data', { p_token: token }).then(({ data }) => {
+      if (data?.industries && data.industries.length > 0) {
+        setIndustriesCatalog(data.industries as IndustryItem[]);
+      }
+      if (Array.isArray(data?.candidates)) {
+        setCandidates(data.candidates);
+      }
+      setLoading(false);
+    });
+  }, [user, token, navigate]);
 
   const resetFilters = () => {
     setSearchQuery('');
@@ -112,12 +106,13 @@ export const CandidatesDirectoryPage: React.FC = () => {
     }
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const fullName = `${cand.first_name || ''} ${cand.last_name || ''}`.toLowerCase();
-      const positions = (cand.positions || []).join(' ').toLowerCase();
-      const bio = (cand.bio_short || '').toLowerCase();
-      const other = (cand.custom_other_text || '').toLowerCase();
-      if (!fullName.includes(q) && !positions.includes(q) && !bio.includes(q) && !other.includes(q)) {
+      const q = normalizeSearchText(searchQuery);
+      const haystack = normalizeSearchText(
+        `${cand.first_name || ''} ${cand.last_name || ''} ${(cand.positions || []).join(' ')} ${
+          cand.bio_short || ''
+        } ${cand.custom_other_text || ''}`
+      );
+      if (!haystack.includes(q)) {
         return false;
       }
     }
@@ -164,8 +159,30 @@ export const CandidatesDirectoryPage: React.FC = () => {
 
       {/* Diseño 20%-25% Filtros a la izquierda / 75%-80% Tarjetas una debajo de la otra a la derecha */}
       <div className="flex flex-col lg:flex-row items-start gap-6">
+        <div className="w-full lg:hidden flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setMobileFiltersOpen((prev) => !prev)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-800 shadow-sm"
+          >
+            <SlidersHorizontal className="w-4 h-4 text-brand-600" />
+            <span>{mobileFiltersOpen ? 'Ocultar Filtros' : 'Mostrar Filtros'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="text-xs font-semibold text-brand-600 hover:underline"
+          >
+            Ver todos
+          </button>
+        </div>
+
         {/* Columna Izquierda (Filtros) */}
-        <aside className="w-full lg:w-[24%] shrink-0 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-4">
+        <aside
+          className={`w-full lg:w-[24%] shrink-0 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-4 ${
+            mobileFiltersOpen ? 'block' : 'hidden lg:block'
+          }`}
+        >
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-900">Filtros</h2>
             <button
@@ -443,7 +460,7 @@ export const CandidatesDirectoryPage: React.FC = () => {
 
               {contactPhone ? (
                 <a
-                  href={`https://wa.me/549${contactPhone}`}
+                  href={buildWhatsAppUrl(contactPhone)}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm"

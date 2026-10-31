@@ -33,6 +33,11 @@ const AdminDashboardPage = lazy(() =>
     default: m.AdminDashboardPage,
   }))
 );
+const ViewCvPage = lazy(() =>
+  import('./pages/ViewCvPage').then((m) => ({
+    default: m.ViewCvPage,
+  }))
+);
 
 export const App: React.FC = () => {
   return (
@@ -54,6 +59,7 @@ export const App: React.FC = () => {
               <Route path="/postulantes" element={<CandidatesDirectoryPage />} />
               <Route path="/mi-perfil" element={<CandidateProfilePage />} />
               <Route path="/mi-comercio" element={<EmployerDashboardPage />} />
+              <Route path="/ver-cv/:candidateId" element={<ViewCvPage />} />
             </Route>
 
             {/* Panel del Administrador (/admin) */}

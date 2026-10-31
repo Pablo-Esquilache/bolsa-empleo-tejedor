@@ -100,7 +100,7 @@ export const MainLayout: React.FC = () => {
       <footer className="bg-white border-t border-slate-200 py-6 mt-12">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <p>© {new Date().getFullYear()} {APP_NAME} — Conectando trabajo y comercios locales.</p>
-          <p>Tus datos privados y teléfono están protegidos y solo se comparten con tu permiso.</p>
+          <p>Acceso exclusivo con sesión verificada para postulantes y comercios registrados.</p>
         </div>
       </footer>
     </div>

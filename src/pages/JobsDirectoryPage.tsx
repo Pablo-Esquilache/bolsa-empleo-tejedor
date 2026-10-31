@@ -11,6 +11,7 @@ import {
   Send,
   Trash2,
   RotateCcw,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   AVAILABILITY_OPTIONS,
@@ -21,7 +22,7 @@ import { LocationSelector, LocationValue } from '../components/ui/LocationSelect
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { IndustryItem } from '../types/database';
-import { sendTransactionalEmail } from '../lib/emailService';
+import { normalizeSearchText, notifyServerEvent } from '../lib/emailService';
 
 function getCandidateApplicationBadge(status: string): { label: string; className: string } {
   switch (status) {
@@ -51,12 +52,13 @@ export const JobsDirectoryPage: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState<LocationValue>({
-    province: 'Buenos Aires',
-    district: 'Carlos Tejedor',
+    province: '',
+    district: '',
     locality: '',
   });
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
   const [selectedAvailability, setSelectedAvailability] = useState<string[]>([]);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
   const [selectedEmployer, setSelectedEmployer] = useState<any | null>(null);
@@ -78,30 +80,20 @@ export const JobsDirectoryPage: React.FC = () => {
       return;
     }
 
-    supabase
-      .from('industries')
-      .select('*')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true })
-      .then(({ data }) => {
-        if (data && data.length > 0) setIndustriesCatalog(data as IndustryItem[]);
-      });
-
     Promise.all([
-      supabase
-        .from('job_posts')
-        .select('*, employer_profiles(trade_name, logo_url, description)')
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('employer_profiles')
-        .select('*')
-        .order('created_at', { ascending: false }),
+      supabase.rpc('get_jobs_directory_data', { p_token: token }),
       loadMyApplications(token),
-    ]).then(([jobsRes, empRes]) => {
-      if (jobsRes.data) setJobs(jobsRes.data);
-      if (empRes.data) setEmployers(empRes.data);
+    ]).then(([dirRes]) => {
+      const payload = dirRes.data;
+      if (payload?.industries && payload.industries.length > 0) {
+        setIndustriesCatalog(payload.industries as IndustryItem[]);
+      }
+      if (Array.isArray(payload?.jobs)) {
+        setJobs(payload.jobs);
+      }
+      if (Array.isArray(payload?.employers)) {
+        setEmployers(payload.employers);
+      }
       setLoading(false);
     });
   }, [user, token, navigate]);
@@ -130,12 +122,13 @@ export const JobsDirectoryPage: React.FC = () => {
     }
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchTitle = (job.title || '').toLowerCase().includes(q);
-      const matchPos = (job.position_tag || '').toLowerCase().includes(q);
-      const matchDesc = (job.description || '').toLowerCase().includes(q);
-      const matchEmp = (job.employer_profiles?.trade_name || '').toLowerCase().includes(q);
-      if (!matchTitle && !matchPos && !matchDesc && !matchEmp) return false;
+      const q = normalizeSearchText(searchQuery);
+      const haystack = normalizeSearchText(
+        `${job.title || ''} ${job.position_tag || ''} ${job.description || ''} ${
+          job.employer_profiles?.trade_name || ''
+        }`
+      );
+      if (!haystack.includes(q)) return false;
     }
 
     return true;
@@ -151,8 +144,10 @@ export const JobsDirectoryPage: React.FC = () => {
     }
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const text = `${emp.trade_name || ''} ${emp.industry || ''} ${emp.description || ''}`.toLowerCase();
+      const q = normalizeSearchText(searchQuery);
+      const text = normalizeSearchText(
+        `${emp.trade_name || ''} ${emp.industry || ''} ${emp.description || ''}`
+      );
       if (!text.includes(q)) return false;
     }
     return true;
@@ -172,11 +167,11 @@ export const JobsDirectoryPage: React.FC = () => {
 
       if (error) throw new Error(error.message);
 
-      if (data?.employer_email) {
-        await sendTransactionalEmail({
-          toEmail: data.employer_email,
-          subject: `Nueva postulación para "${data.job_title}"`,
-          htmlContent: `<p>Hola, <strong>${data.candidate_name}</strong> se postuló a tu búsqueda <strong>${data.job_title}</strong> en Bolsa de Empleo Tejedor.</p>`,
+      if (data?.application_id) {
+        notifyServerEvent({
+          token,
+          eventType: 'new_application',
+          targetId: data.application_id,
         });
       }
 
@@ -303,8 +298,31 @@ export const JobsDirectoryPage: React.FC = () => {
       ) : (
         /* Diseño 20%-25% Filtros a la izquierda / 75%-80% Tarjetas una debajo de la otra a la derecha */
         <div className="flex flex-col lg:flex-row items-start gap-6">
+          {/* Botón desplegable de filtros para celular */}
+          <div className="w-full lg:hidden flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen((prev) => !prev)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-800 shadow-sm"
+            >
+              <SlidersHorizontal className="w-4 h-4 text-brand-600" />
+              <span>{mobileFiltersOpen ? 'Ocultar Filtros' : 'Mostrar Filtros de Búsqueda'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="text-xs font-semibold text-brand-600 hover:underline"
+            >
+              Ver todo
+            </button>
+          </div>
+
           {/* Columna Izquierda (Filtros) */}
-          <aside className="w-full lg:w-[24%] shrink-0 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-4">
+          <aside
+            className={`w-full lg:w-[24%] shrink-0 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-4 ${
+              mobileFiltersOpen ? 'block' : 'hidden lg:block'
+            }`}
+          >
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-slate-900">Filtros de Búsqueda</h2>
               <button

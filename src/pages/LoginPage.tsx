@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Mail,
@@ -9,62 +9,55 @@ import {
   AlertCircle,
   CheckCircle2,
   ArrowLeft,
+  RefreshCw,
 } from 'lucide-react';
 import { UserRole } from '../types/database';
-import { APP_NAME } from '../lib/constants';
 import { supabase } from '../lib/supabase';
-import { buildOtpEmailHtml, sendTransactionalEmail } from '../lib/emailService';
+import { requestServerOtp } from '../lib/emailService';
 import { useAuth } from '../context/AuthContext';
 
 export const LoginPage: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { setSession } = useAuth();
 
   const roleParam = searchParams.get('rol') as UserRole | null;
+  const hasExplicitRole = roleParam === 'employer' || roleParam === 'candidate';
   const selectedRole: 'candidate' | 'employer' =
     roleParam === 'employer' ? 'employer' : 'candidate';
 
   const [email, setEmail] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
-  const [devFallbackCode, setDevFallbackCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const isEmployer = selectedRole === 'employer';
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) return;
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) return;
     setLoading(true);
     setErrorMsg(null);
-    setDevFallbackCode(null);
 
     try {
-      const { data, error } = await supabase.rpc('create_otp_challenge', {
-        p_email: email.trim(),
-        p_role: selectedRole,
-      });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      const generatedCode = data?.code;
-      const roleLabel = isEmployer ? 'Comercio / Empleador' : 'Postulante';
-
-      const emailSent = await sendTransactionalEmail({
-        toEmail: email.trim(),
-        subject: `Tu código de ingreso: ${generatedCode} — ${APP_NAME}`,
-        htmlContent: buildOtpEmailHtml(generatedCode, roleLabel),
-      });
-
-      if (!emailSent) {
-        setDevFallbackCode(generatedCode);
+      const result = await requestServerOtp(cleanEmail, selectedRole);
+      if (!result.ok) {
+        throw new Error(result.error || 'No se pudo enviar el código de acceso.');
       }
 
       setOtpSent(true);
+      setResendCooldown(60);
     } catch (err: any) {
       setErrorMsg(err.message || 'No se pudo generar el código de acceso.');
     } finally {
@@ -80,7 +73,7 @@ export const LoginPage: React.FC = () => {
 
     try {
       const { data, error } = await supabase.rpc('verify_otp_code', {
-        p_email: email.trim(),
+        p_email: email.trim().toLowerCase(),
         p_code: otpCode.trim(),
         p_role: selectedRole,
       });
@@ -91,7 +84,6 @@ export const LoginPage: React.FC = () => {
 
       setSession(data.token, data.user);
 
-      // Si ya tenía el perfil/comercio cargado, va directo al directorio; si es nuevo, va a cargarlo
       if (data.user.role === 'employer') {
         if (data.has_completed_profile) {
           navigate('/postulantes');
@@ -123,6 +115,33 @@ export const LoginPage: React.FC = () => {
       </Link>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+        {!hasExplicitRole && !otpSent && (
+          <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-100">
+            <button
+              type="button"
+              onClick={() => setSearchParams({ rol: 'candidate' })}
+              className={`py-2 px-3 rounded-lg text-xs font-bold transition-colors ${
+                !isEmployer
+                  ? 'bg-white text-brand-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Soy Postulante
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchParams({ rol: 'employer' })}
+              className={`py-2 px-3 rounded-lg text-xs font-bold transition-colors ${
+                isEmployer
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Soy Comercio
+            </button>
+          </div>
+        )}
+
         <div className="text-center space-y-2">
           <div
             className={`w-12 h-12 rounded-2xl mx-auto flex items-center justify-center ${
@@ -166,6 +185,7 @@ export const LoginPage: React.FC = () => {
                 <input
                   type="email"
                   required
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="ejemplo@correo.com"
@@ -196,14 +216,9 @@ export const LoginPage: React.FC = () => {
             <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 space-y-1">
               <div className="flex items-center gap-1.5 font-semibold">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Código enviado a {email}</span>
+                <span>Código enviado a {email.trim().toLowerCase()}</span>
               </div>
-              <p>Revisá tu bandeja de entrada e ingresá los 6 números.</p>
-              {devFallbackCode && (
-                <p className="mt-1 font-mono bg-white/80 px-2 py-1 rounded border border-emerald-300 text-emerald-950">
-                  Modo prueba local — Tu código es: <strong>{devFallbackCode}</strong>
-                </p>
-              )}
+              <p>Revisá tu bandeja de entrada (o Spam) e ingresá los 6 números. Vence en 10 minutos.</p>
             </div>
 
             <div>
@@ -215,6 +230,7 @@ export const LoginPage: React.FC = () => {
                 <input
                   type="text"
                   inputMode="numeric"
+                  autoComplete="one-time-code"
                   maxLength={6}
                   required
                   value={otpCode}
@@ -234,17 +250,33 @@ export const LoginPage: React.FC = () => {
               <ArrowRight className="w-4 h-4" />
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setOtpSent(false);
-                setOtpCode('');
-                setErrorMsg(null);
-              }}
-              className="text-xs text-brand-700 hover:underline font-medium block mx-auto"
-            >
-              ← Cambiar correo electrónico
-            </button>
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setOtpSent(false);
+                  setOtpCode('');
+                  setErrorMsg(null);
+                }}
+                className="text-xs text-slate-600 hover:text-slate-900 font-medium"
+              >
+                ← Cambiar correo
+              </button>
+
+              <button
+                type="button"
+                disabled={loading || resendCooldown > 0}
+                onClick={() => handleSendOtp()}
+                className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline font-semibold disabled:opacity-50"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>
+                  {resendCooldown > 0
+                    ? `Reenviar en ${resendCooldown}s`
+                    : 'Reenviar código'}
+                </span>
+              </button>
+            </div>
           </form>
         )}
       </div>

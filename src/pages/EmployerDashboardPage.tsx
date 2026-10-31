@@ -14,6 +14,9 @@ import {
   Users,
   FileText,
   MessageCircle,
+  HelpCircle,
+  Send,
+  Filter,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -24,7 +27,8 @@ import {
 } from '../lib/constants';
 import { ChipSelector } from '../components/ui/ChipSelector';
 import { LocationSelector, LocationValue } from '../components/ui/LocationSelector';
-import { compressImageToWebP } from '../lib/imageCompression';
+import { compressImageToDataUrl } from '../lib/imageCompression';
+import { buildWhatsAppUrl, notifyServerEvent } from '../lib/emailService';
 import { IndustryItem } from '../types/database';
 
 type AppTrackingStatus = 'received' | 'in_review' | 'shortlisted' | 'hired' | 'rejected';
@@ -67,12 +71,29 @@ const TRACKING_STATUS_OPTIONS: {
   },
 ];
 
+const TICKET_CATEGORIES = [
+  'Pedir que agreguen un Rubro o Puesto',
+  'Consulta sobre mi cuenta o una búsqueda',
+  'Otra consulta / sugerencia',
+];
+
 export const EmployerDashboardPage: React.FC = () => {
   const { token, user } = useAuth();
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState<'my_jobs' | 'new_job' | 'profile'>('my_jobs');
+  const [tab, setTab] = useState<'my_jobs' | 'new_job' | 'profile' | 'admin_support'>('my_jobs');
   const [industriesCatalog, setIndustriesCatalog] = useState<IndustryItem[]>(INITIAL_INDUSTRIES);
+  const [myJobs, setMyJobs] = useState<any[]>([]);
+
+  // Filtros en Mis Búsquedas y Seguimiento
+  const [selectedJobFilter, setSelectedJobFilter] = useState<string>('ALL');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('ALL');
+
+  // Consultas al Administrador
+  const [myTickets, setMyTickets] = useState<any[]>([]);
+  const [ticketCategory, setTicketCategory] = useState<string>(TICKET_CATEGORIES[0]);
+  const [ticketMessage, setTicketMessage] = useState<string>('');
+  const [sendingTicket, setSendingTicket] = useState(false);
 
   // Datos del Comercio
   const [tradeName, setTradeName] = useState('');
@@ -80,7 +101,7 @@ export const EmployerDashboardPage: React.FC = () => {
   const [cuit, setCuit] = useState('');
   const [contactPersonName, setContactPersonName] = useState('');
   const [phone, setPhone] = useState('');
-  const [industry, setIndustry] = useState<string>(INITIAL_INDUSTRIES[0].name);
+  const [industry, setIndustry] = useState('Comercio y Ventas');
   const [location, setLocation] = useState<LocationValue>({
     province: 'Buenos Aires',
     district: 'Carlos Tejedor',
@@ -91,7 +112,7 @@ export const EmployerDashboardPage: React.FC = () => {
 
   // Nueva búsqueda laboral
   const [jobTitle, setJobTitle] = useState('');
-  const [jobIndustry, setJobIndustry] = useState<string>(INITIAL_INDUSTRIES[0].name);
+  const [jobIndustry, setJobIndustry] = useState('Comercio y Ventas');
   const [jobPositionTag, setJobPositionTag] = useState('');
   const [jobOtherText, setJobOtherText] = useState('');
   const [jobLocation, setJobLocation] = useState<LocationValue>({
@@ -99,22 +120,29 @@ export const EmployerDashboardPage: React.FC = () => {
     district: 'Carlos Tejedor',
     locality: 'Carlos Tejedor',
   });
-  const [jobAvailability, setJobAvailability] = useState<string[]>([]);
-  const [jobEducation, setJobEducation] = useState<string>('Primario');
+  const [jobAvailability, setJobAvailability] = useState<string[]>(['Tiempo completo']);
+  const [jobEducation, setJobEducation] = useState<string>('Sin requisito excluyente');
   const [jobDescription, setJobDescription] = useState('');
 
-  // Mis búsquedas + Postulantes recibidos
-  const [myJobs, setMyJobs] = useState<any[]>([]);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  const loadMyJobs = async (currentToken: string) => {
+  const loadMyJobs = async (sessionToken: string) => {
     const { data } = await supabase.rpc('employer_get_my_jobs_with_applicants', {
-      p_token: currentToken,
+      p_token: sessionToken,
     });
     if (Array.isArray(data)) {
       setMyJobs(data);
+    }
+  };
+
+  const loadMyTickets = async (sessionToken: string) => {
+    const { data } = await supabase.rpc('employer_get_my_tickets', {
+      p_token: sessionToken,
+    });
+    if (Array.isArray(data)) {
+      setMyTickets(data);
     }
   };
 
@@ -135,25 +163,19 @@ export const EmployerDashboardPage: React.FC = () => {
 
     supabase.rpc('get_my_employer_data', { p_token: token }).then(({ data }) => {
       if (data?.profile) {
-        const p = data.profile;
-        setTradeName(p.trade_name || '');
-        setLegalName(p.legal_name || '');
-        setCuit(p.cuit || '');
-        setIndustry(p.industry || INITIAL_INDUSTRIES[0].name);
+        const ep = data.profile;
+        setTradeName(ep.trade_name || '');
+        setLegalName(ep.legal_name || '');
+        setCuit(ep.cuit || '');
+        setIndustry(ep.industry || 'Comercio y Ventas');
         setLocation({
-          province: p.province || 'Buenos Aires',
-          district: p.district || 'Carlos Tejedor',
-          locality: p.locality || 'Carlos Tejedor',
+          province: ep.province || 'Buenos Aires',
+          district: ep.district || 'Carlos Tejedor',
+          locality: ep.locality || 'Carlos Tejedor',
         });
-        setJobLocation({
-          province: p.province || 'Buenos Aires',
-          district: p.district || 'Carlos Tejedor',
-          locality: p.locality || 'Carlos Tejedor',
-        });
-        setDescription(p.description || '');
-        setLogoUrl(p.logo_url || null);
+        setDescription(ep.description || '');
+        setLogoUrl(ep.logo_url || null);
       } else {
-        // Si todavía no cargó la ficha del comercio, abrir la pestaña de datos primero
         setTab('profile');
       }
       if (data?.private) {
@@ -163,10 +185,11 @@ export const EmployerDashboardPage: React.FC = () => {
     });
 
     loadMyJobs(token);
+    loadMyTickets(token);
   }, [user, token, navigate]);
 
   const suggestedPositionsForJob =
-    industriesCatalog.find((i) => i.name === jobIndustry)?.suggested_positions || [];
+    industriesCatalog.find((ind) => ind.name === jobIndustry)?.suggested_positions || [];
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -175,17 +198,9 @@ export const EmployerDashboardPage: React.FC = () => {
     setMessage(null);
 
     try {
-      const compressed = await compressImageToWebP(file, 512, 0.82);
-      const filePath = `${user.id}/logo-${Date.now()}.webp`;
-
-      const { error } = await supabase.storage
-        .from('avatars_and_logos')
-        .upload(filePath, compressed, { upsert: true, contentType: 'image/webp' });
-
-      if (error) throw new Error(error.message);
-
-      const { data: pub } = supabase.storage.from('avatars_and_logos').getPublicUrl(filePath);
-      setLogoUrl(pub.publicUrl);
+      const dataUrl = await compressImageToDataUrl(file, 384, 0.8);
+      setLogoUrl(dataUrl);
+      setMessage({ type: 'ok', text: 'Logo procesado. Guardá los datos del comercio para confirmar.' });
     } catch (err: any) {
       setMessage({ type: 'err', text: err.message || 'Error al subir el logo.' });
     } finally {
@@ -200,7 +215,7 @@ export const EmployerDashboardPage: React.FC = () => {
     if (!tradeName.trim() || !contactPersonName.trim() || !phone.trim() || !location.locality) {
       setMessage({
         type: 'err',
-        text: 'Completá nombre comercial, persona responsable, teléfono y localidad.',
+        text: 'Completá nombre comercial, persona de contacto, teléfono y elegí la localidad.',
       });
       return;
     }
@@ -236,12 +251,12 @@ export const EmployerDashboardPage: React.FC = () => {
 
   const handlePublishJob = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !user) return;
+    if (!token) return;
 
-    if (!jobTitle.trim() || !jobLocation.locality || jobAvailability.length === 0) {
+    if (!jobTitle.trim() || !jobDescription.trim() || !jobLocation.locality) {
       setMessage({
         type: 'err',
-        text: 'Completá el título del puesto, la localidad y al menos una disponibilidad horaria.',
+        text: 'Completá el título de la búsqueda, la localidad y la descripción del puesto.',
       });
       return;
     }
@@ -313,15 +328,63 @@ export const EmployerDashboardPage: React.FC = () => {
       return;
     }
 
+    notifyServerEvent({
+      token,
+      eventType: 'application_status_changed',
+      targetId: applicationId,
+    });
+
     await loadMyJobs(token);
   };
+
+  const handleCreateTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !ticketMessage.trim()) return;
+    setSendingTicket(true);
+    setMessage(null);
+
+    try {
+      const { data, error } = await supabase.rpc('employer_create_admin_ticket', {
+        p_token: token,
+        p_category: ticketCategory,
+        p_message: ticketMessage.trim(),
+      });
+
+      if (error) throw new Error(error.message);
+
+      if (data?.ticket_id) {
+        notifyServerEvent({
+          token,
+          eventType: 'admin_ticket_created',
+          targetId: data.ticket_id,
+        });
+      }
+
+      setTicketMessage('');
+      setMessage({
+        type: 'ok',
+        text: 'Tu consulta fue enviada al Administrador. Verás su respuesta aquí mismo.',
+      });
+      await loadMyTickets(token);
+    } catch (err: any) {
+      setMessage({ type: 'err', text: err.message || 'No se pudo enviar la consulta.' });
+    } finally {
+      setSendingTicket(false);
+    }
+  };
+
+  const visibleJobs = myJobs.filter((job) =>
+    selectedJobFilter === 'ALL' ? true : job.id === selectedJobFilter
+  );
+
+  const answeredTicketsCount = myTickets.filter((t) => Boolean(t.admin_reply)).length;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Panel de Mi Comercio</h1>
         <p className="text-sm text-slate-600">
-          Seguimiento de tus búsquedas laborales, postulantes recibidos y ficha de tu comercio.
+          Seguimiento de tus búsquedas laborales, postulantes recibidos y comunicación con el Administrador.
         </p>
       </div>
 
@@ -365,6 +428,24 @@ export const EmployerDashboardPage: React.FC = () => {
           <Building2 className="w-4 h-4" />
           <span>Datos del Comercio</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setTab('admin_support')}
+          className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+            tab === 'admin_support'
+              ? 'bg-slate-900 text-white'
+              : 'bg-white text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <HelpCircle className="w-4 h-4" />
+          <span>Consultas al Administrador</span>
+          {answeredTicketsCount > 0 && (
+            <span className="ml-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500 text-white">
+              {answeredTicketsCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {message && (
@@ -386,6 +467,47 @@ export const EmployerDashboardPage: React.FC = () => {
 
       {tab === 'my_jobs' && (
         <div className="space-y-5">
+          {myJobs.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5 flex-1">
+                <Filter className="w-4 h-4 text-brand-600 shrink-0" />
+                <label className="text-xs font-bold uppercase text-slate-600 shrink-0">
+                  Filtrar por búsqueda:
+                </label>
+                <select
+                  value={selectedJobFilter}
+                  onChange={(e) => setSelectedJobFilter(e.target.value)}
+                  className="w-full sm:max-w-xs rounded-xl border border-slate-300 px-3 py-2 text-xs sm:text-sm font-semibold text-slate-800 bg-white focus:border-brand-600 focus:outline-none"
+                >
+                  <option value="ALL">Todas mis búsquedas ({myJobs.length})</option>
+                  {myJobs.map((j) => (
+                    <option key={j.id} value={j.id}>
+                      {j.title} ({(j.applicants || []).length} postulantes)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-bold uppercase text-slate-600 shrink-0">
+                  Estado de postulante:
+                </label>
+                <select
+                  value={selectedStatusFilter}
+                  onChange={(e) => setSelectedStatusFilter(e.target.value)}
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-xs sm:text-sm font-semibold text-slate-800 bg-white focus:border-brand-600 focus:outline-none"
+                >
+                  <option value="ALL">Todos los estados</option>
+                  {TRACKING_STATUS_OPTIONS.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           {myJobs.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3">
               <Briefcase className="w-9 h-9 text-slate-400 mx-auto" />
@@ -402,8 +524,14 @@ export const EmployerDashboardPage: React.FC = () => {
               </button>
             </div>
           ) : (
-            myJobs.map((job) => {
-              const applicants: any[] = job.applicants || [];
+            visibleJobs.map((job) => {
+              const allApplicants: any[] = job.applicants || [];
+              const applicants =
+                selectedStatusFilter === 'ALL'
+                  ? allApplicants
+                  : allApplicants.filter(
+                      (a) => (a.application_status || 'received') === selectedStatusFilter
+                    );
 
               return (
                 <div
@@ -463,23 +591,31 @@ export const EmployerDashboardPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Seguimiento directo de postulantes a la vista */}
+                  {/* Seguimiento directo de postulantes con Scroll interno (2 a 3 tarjetas visibles) */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
                         <Users className="w-4 h-4 text-brand-600" />
                         <span>
-                          Seguimiento de Postulantes en esta búsqueda ({applicants.length})
+                          Postulantes en esta búsqueda ({applicants.length}
+                          {selectedStatusFilter !== 'ALL' ? ` de ${allApplicants.length}` : ''})
                         </span>
                       </h4>
+                      {applicants.length > 2 && (
+                        <span className="text-[11px] font-medium text-slate-500">
+                          Deslizá dentro del recuadro para ver más ↓
+                        </span>
+                      )}
                     </div>
 
                     {applicants.length === 0 ? (
                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500">
-                        Todavía no se postularon candidatos a este aviso. Cuando alguien se anote, aparecerá acá mismo para que le hagas el seguimiento.
+                        {allApplicants.length === 0
+                          ? 'Todavía no se postularon candidatos a este aviso. Cuando alguien se anote, aparecerá acá mismo para que le hagas el seguimiento.'
+                          : 'No hay postulantes en este aviso con el estado filtrado.'}
                       </div>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="max-h-[430px] overflow-y-auto pr-1.5 space-y-3">
                         {applicants.map((app) => {
                           const currentStatus: AppTrackingStatus =
                             app.application_status || 'received';
@@ -529,7 +665,7 @@ export const EmployerDashboardPage: React.FC = () => {
 
                                   {app.phone && (
                                     <a
-                                      href={`https://wa.me/549${app.phone}`}
+                                      href={buildWhatsAppUrl(app.phone)}
                                       target="_blank"
                                       rel="noreferrer"
                                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
@@ -737,8 +873,8 @@ export const EmployerDashboardPage: React.FC = () => {
                 type="tel"
                 required
                 value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                placeholder="Ej.: 2355445566"
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Ej.: 2355 445566"
                 className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-brand-600 focus:outline-none"
               />
             </div>
@@ -791,6 +927,108 @@ export const EmployerDashboardPage: React.FC = () => {
             <span>{saving ? 'Guardando...' : 'Guardar Comercio e Ir a Ver Postulantes'}</span>
           </button>
         </form>
+      )}
+
+      {tab === 'admin_support' && (
+        <div className="space-y-6">
+          <form
+            onSubmit={handleCreateTicket}
+            className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4"
+          >
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">
+                Enviar consulta o pedido al Administrador
+              </h2>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Escribinos si necesitás que sumemos un rubro, oficio o puesto nuevo al catálogo, o por cualquier consulta sobre tus búsquedas.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                Motivo de la consulta
+              </label>
+              <select
+                value={ticketCategory}
+                onChange={(e) => setTicketCategory(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm bg-white focus:border-brand-600 focus:outline-none"
+              >
+                {TICKET_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                Tu mensaje para el Administrador *
+              </label>
+              <textarea
+                rows={4}
+                required
+                value={ticketMessage}
+                onChange={(e) => setTicketMessage(e.target.value)}
+                placeholder="Ej.: Hola, ¿podrían agregar el puesto de Chapista / Pintor dentro del rubro Automotor?"
+                className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-brand-600 focus:outline-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={sendingTicket || !ticketMessage.trim()}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-bold shadow-sm transition-colors"
+            >
+              <Send className="w-4 h-4" />
+              <span>{sendingTicket ? 'Enviando...' : 'Enviar consulta al Administrador'}</span>
+            </button>
+          </form>
+
+          {/* Historial de consultas del comercio */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+            <h3 className="text-base font-bold text-slate-900">
+              Mis consultas enviadas ({myTickets.length})
+            </h3>
+
+            {myTickets.length === 0 ? (
+              <p className="text-xs text-slate-500">
+                Todavía no enviaste consultas al Administrador.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {myTickets.map((tk) => (
+                  <div
+                    key={tk.id}
+                    className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-slate-800">{tk.category}</span>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                          tk.status === 'resolved'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {tk.status === 'resolved' ? 'Respondida / Resuelta' : 'Pendiente de revisión'}
+                      </span>
+                    </div>
+
+                    <p className="text-sm text-slate-800 whitespace-pre-line">{tk.message}</p>
+
+                    {tk.admin_reply && (
+                      <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
+                        <p className="font-bold text-emerald-800">Respuesta del Administrador:</p>
+                        <p className="whitespace-pre-line text-sm">{tk.admin_reply}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

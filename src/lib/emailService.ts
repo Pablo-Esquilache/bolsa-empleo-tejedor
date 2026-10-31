@@ -1,12 +1,42 @@
-import { APP_NAME } from './constants';
+export async function requestServerOtp(
+  email: string,
+  role: 'candidate' | 'employer' | 'admin'
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/auth-request-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim().toLowerCase(), role }),
+    });
 
-export async function sendTransactionalEmail(params: {
-  toEmail: string;
-  subject: string;
-  htmlContent: string;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: data?.error || 'No pudimos enviar el código. Intentá nuevamente.',
+      };
+    }
+
+    return { ok: true };
+  } catch {
+    return {
+      ok: false,
+      error: 'Error de conexión al solicitar el código. Verificá tu internet e intentá de nuevo.',
+    };
+  }
+}
+
+export async function notifyServerEvent(params: {
+  token: string;
+  eventType:
+    | 'new_application'
+    | 'application_status_changed'
+    | 'admin_ticket_created'
+    | 'admin_ticket_replied';
+  targetId: string;
 }): Promise<boolean> {
   try {
-    const res = await fetch('/api/send-email', {
+    const res = await fetch('/api/notify-event', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
@@ -17,20 +47,41 @@ export async function sendTransactionalEmail(params: {
   }
 }
 
-export function buildOtpEmailHtml(code: string, roleLabel: string): string {
-  return `
-    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; color: #0f172a;">
-      <h2 style="margin-top: 0; color: #0369a1;">${APP_NAME}</h2>
-      <p style="font-size: 15px; line-height: 1.5;">
-        Hola, solicitaste ingresar a <strong>${APP_NAME}</strong> (${roleLabel}).
-      </p>
-      <p style="font-size: 15px;">Tu código de acceso de 6 dígitos es:</p>
-      <div style="background: #f0f7ff; border: 2px solid #0284c7; border-radius: 12px; padding: 16px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #0c4a6e; margin: 20px 0;">
-        ${code}
-      </div>
-      <p style="font-size: 13px; color: #64748b;">
-        Este código es válido por 15 minutos. Si no solicitaste este código, podés ignorar este mensaje.
-      </p>
-    </div>
-  `;
+export function normalizeSearchText(str: string | null | undefined): string {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/vendedora/g, 'vendedor')
+    .replace(/cajera/g, 'cajero')
+    .replace(/cocinera/g, 'cocinero')
+    .replace(/administrativa/g, 'administrativo')
+    .replace(/operaria/g, 'operario')
+    .replace(/encargada/g, 'encargado')
+    .trim();
+}
+
+export function formatWhatsAppNumber(rawPhone: string | null | undefined): string {
+  if (!rawPhone) return '';
+  let digits = String(rawPhone).replace(/\D/g, '');
+  if (digits.startsWith('549') && digits.length >= 13) {
+    digits = digits.slice(3);
+  } else if (digits.startsWith('54') && digits.length >= 12) {
+    digits = digits.slice(2);
+  }
+  if (digits.startsWith('0')) {
+    digits = digits.slice(1);
+  }
+  if (digits.length === 12 && digits.slice(4, 6) === '15') {
+    digits = digits.slice(0, 4) + digits.slice(6);
+  } else if (digits.length === 11 && digits.slice(3, 5) === '15') {
+    digits = digits.slice(0, 3) + digits.slice(5);
+  }
+  return digits;
+}
+
+export function buildWhatsAppUrl(rawPhone: string | null | undefined): string {
+  const clean = formatWhatsAppNumber(rawPhone);
+  return clean ? `https://wa.me/549${clean}` : '#';
 }

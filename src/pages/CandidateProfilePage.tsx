@@ -11,7 +11,7 @@ import {
 } from '../lib/constants';
 import { ChipSelector } from '../components/ui/ChipSelector';
 import { LocationSelector, LocationValue } from '../components/ui/LocationSelector';
-import { compressImageToWebP } from '../lib/imageCompression';
+import { compressImageToDataUrl, fileToBase64 } from '../lib/imageCompression';
 import { validatePdfFile } from '../lib/pdfValidation';
 import { IndustryItem, WorkSituation } from '../types/database';
 
@@ -103,17 +103,9 @@ export const CandidateProfilePage: React.FC = () => {
     setMessage(null);
 
     try {
-      const compressed = await compressImageToWebP(file, 512, 0.82);
-      const filePath = `${user.id}/avatar-${Date.now()}.webp`;
-
-      const { error } = await supabase.storage
-        .from('avatars_and_logos')
-        .upload(filePath, compressed, { upsert: true, contentType: 'image/webp' });
-
-      if (error) throw new Error(error.message);
-
-      const { data: pub } = supabase.storage.from('avatars_and_logos').getPublicUrl(filePath);
-      setAvatarUrl(pub.publicUrl);
+      const dataUrl = await compressImageToDataUrl(file, 384, 0.8);
+      setAvatarUrl(dataUrl);
+      setMessage({ type: 'ok', text: 'Foto de perfil procesada. Tocá "Guardar mi Perfil" para confirmar.' });
     } catch (err: any) {
       setMessage({ type: 'err', text: err.message || 'Error al subir la foto.' });
     } finally {
@@ -123,7 +115,7 @@ export const CandidateProfilePage: React.FC = () => {
 
   const handleCvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !user || !token) return;
     setUploadingCv(true);
     setMessage(null);
 
@@ -133,16 +125,17 @@ export const CandidateProfilePage: React.FC = () => {
         throw new Error(check.error);
       }
 
-      const filePath = `${user.id}/cv-${Date.now()}.pdf`;
-      const { error } = await supabase.storage
-        .from('cvs')
-        .upload(filePath, file, { upsert: true, contentType: 'application/pdf' });
+      const base64Pdf = await fileToBase64(file);
+      const { data, error } = await supabase.rpc('upload_candidate_cv', {
+        p_token: token,
+        p_filename: file.name,
+        p_base64_pdf: base64Pdf,
+      });
 
       if (error) throw new Error(error.message);
 
-      const { data: pub } = supabase.storage.from('cvs').getPublicUrl(filePath);
-      setCvPath(pub.publicUrl);
-      setMessage({ type: 'ok', text: 'Currículum Vitae en PDF subido con éxito.' });
+      setCvPath(data?.cv_path || `/ver-cv/${user.id}`);
+      setMessage({ type: 'ok', text: 'Currículum Vitae en PDF guardado de forma segura.' });
     } catch (err: any) {
       setMessage({ type: 'err', text: err.message || 'Error al subir el CV.' });
     } finally {

@@ -16,6 +16,10 @@ import {
   KeyRound,
   Mail,
   RotateCcw,
+  HelpCircle,
+  Send,
+  CheckCircle2,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   AVAILABILITY_OPTIONS,
@@ -27,7 +31,12 @@ import { ChipSelector } from '../components/ui/ChipSelector';
 import { LocationSelector, LocationValue } from '../components/ui/LocationSelector';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { buildOtpEmailHtml, sendTransactionalEmail } from '../lib/emailService';
+import {
+  buildWhatsAppUrl,
+  normalizeSearchText,
+  notifyServerEvent,
+  requestServerOtp,
+} from '../lib/emailService';
 import { IndustryItem } from '../types/database';
 
 export const AdminDashboardPage: React.FC = () => {
@@ -37,19 +46,22 @@ export const AdminDashboardPage: React.FC = () => {
   const [adminEmail, setAdminEmail] = useState('pabloesquilache@gmail.com');
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
   // Datos del tablero
-  const [activeTab, setActiveTab] = useState<'candidates' | 'employers' | 'jobs' | 'industries'>(
-    'candidates'
-  );
+  const [activeTab, setActiveTab] = useState<
+    'candidates' | 'employers' | 'jobs' | 'industries' | 'tickets'
+  >('candidates');
   const [candidates, setCandidates] = useState<any[]>([]);
   const [employers, setEmployers] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [replyByTicket, setReplyByTicket] = useState<Record<string, string>>({});
+  const [replyingTicketId, setReplyingTicketId] = useState<string | null>(null);
   const [industriesCatalog, setIndustriesCatalog] = useState<IndustryItem[]>(INITIAL_INDUSTRIES);
   const [loadingData, setLoadingData] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // Filtros compartidos del Administrador
   const [searchQuery, setSearchQuery] = useState('');
@@ -95,6 +107,7 @@ export const AdminDashboardPage: React.FC = () => {
         setCandidates(data.candidates || []);
         setEmployers(data.employers || []);
         setJobs(data.jobs || []);
+        setTickets(data.tickets || []);
       }
     } finally {
       setLoadingData(false);
@@ -120,21 +133,12 @@ export const AdminDashboardPage: React.FC = () => {
     e.preventDefault();
     setAuthLoading(true);
     setAuthError(null);
-    setDevCode(null);
 
     try {
-      const { data, error } = await supabase.rpc('create_otp_challenge', {
-        p_email: adminEmail.trim(),
-        p_role: 'admin',
-      });
-      if (error) throw new Error(error.message);
-
-      const sent = await sendTransactionalEmail({
-        toEmail: adminEmail.trim(),
-        subject: `Código de Administrador: ${data.code} — Bolsa de Empleo Tejedor`,
-        htmlContent: buildOtpEmailHtml(data.code, 'Panel de Administración'),
-      });
-      if (!sent) setDevCode(data.code);
+      const res = await requestServerOtp(adminEmail.trim().toLowerCase(), 'admin');
+      if (!res.ok) {
+        throw new Error(res.error || 'No se pudo enviar el código.');
+      }
       setOtpSent(true);
     } catch (err: any) {
       setAuthError(err.message || 'Error al generar código.');
@@ -150,7 +154,7 @@ export const AdminDashboardPage: React.FC = () => {
 
     try {
       const { data, error } = await supabase.rpc('verify_otp_code', {
-        p_email: adminEmail.trim(),
+        p_email: adminEmail.trim().toLowerCase(),
         p_code: otpCode.trim(),
         p_role: 'admin',
       });
@@ -187,6 +191,39 @@ export const AdminDashboardPage: React.FC = () => {
 
     setDetailModal(null);
     await fetchAdminData(token);
+  };
+
+  const handleReplyTicket = async (
+    ticketId: string,
+    replyText: string,
+    nextStatus: 'pending' | 'resolved'
+  ) => {
+    if (!token) return;
+    setReplyingTicketId(ticketId);
+    try {
+      const { error } = await supabase.rpc('admin_reply_ticket', {
+        p_token: token,
+        p_ticket_id: ticketId,
+        p_reply: replyText,
+        p_status: nextStatus,
+      });
+      if (error) throw new Error(error.message);
+
+      if (replyText.trim()) {
+        notifyServerEvent({
+          token,
+          eventType: 'admin_ticket_replied',
+          targetId: ticketId,
+        });
+      }
+
+      setReplyByTicket((prev) => ({ ...prev, [ticketId]: '' }));
+      await fetchAdminData(token);
+    } catch (err: any) {
+      alert(err.message || 'No se pudo guardar la respuesta.');
+    } finally {
+      setReplyingTicketId(null);
+    }
   };
 
   const handleSaveIndustry = async (e: React.FormEvent) => {
@@ -265,7 +302,7 @@ export const AdminDashboardPage: React.FC = () => {
           <div className="text-center space-y-1">
             <h2 className="text-xl font-bold text-slate-900">Acceso Administrador</h2>
             <p className="text-xs text-slate-500">
-              Ingresá con tu correo de administrador y el código de 6 dígitos.
+              Ingresá con tu correo de administrador y el código de 6 dígitos enviado a tu email.
             </p>
           </div>
 
@@ -302,11 +339,6 @@ export const AdminDashboardPage: React.FC = () => {
             </form>
           ) : (
             <form onSubmit={handleAdminVerifyOtp} className="space-y-4">
-              {devCode && (
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
-                  Modo prueba local — Código: <strong>{devCode}</strong>
-                </div>
-              )}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Código de 6 dígitos
@@ -315,6 +347,8 @@ export const AdminDashboardPage: React.FC = () => {
                   <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                   <input
                     type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
                     maxLength={6}
                     required
                     value={otpCode}
@@ -366,10 +400,12 @@ export const AdminDashboardPage: React.FC = () => {
     }
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const text = `${cand.first_name} ${cand.last_name} ${cand.email} ${cand.phone} ${(
-        cand.positions || []
-      ).join(' ')}`.toLowerCase();
+      const q = normalizeSearchText(searchQuery);
+      const text = normalizeSearchText(
+        `${cand.first_name} ${cand.last_name} ${cand.email} ${cand.phone} ${(
+          cand.positions || []
+        ).join(' ')}`
+      );
       if (!text.includes(q)) return false;
     }
     return true;
@@ -383,10 +419,12 @@ export const AdminDashboardPage: React.FC = () => {
     if (selectedIndustries.length > 0 && !selectedIndustries.includes(emp.industry)) return false;
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const text = `${emp.trade_name} ${emp.legal_name || ''} ${emp.contact_person_name || ''} ${
-        emp.email || ''
-      }`.toLowerCase();
+      const q = normalizeSearchText(searchQuery);
+      const text = normalizeSearchText(
+        `${emp.trade_name} ${emp.legal_name || ''} ${emp.contact_person_name || ''} ${
+          emp.email || ''
+        }`
+      );
       if (!text.includes(q)) return false;
     }
     return true;
@@ -400,8 +438,8 @@ export const AdminDashboardPage: React.FC = () => {
     if (selectedIndustries.length > 0 && !selectedIndustries.includes(job.industry)) return false;
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const text = `${job.title} ${job.trade_name} ${job.description}`.toLowerCase();
+      const q = normalizeSearchText(searchQuery);
+      const text = normalizeSearchText(`${job.title} ${job.trade_name} ${job.description}`);
       if (!text.includes(q)) return false;
     }
     return true;
@@ -411,6 +449,8 @@ export const AdminDashboardPage: React.FC = () => {
     candidates.filter((c) => c.account_status === 'paused').length +
     employers.filter((e) => e.account_status === 'paused').length +
     jobs.filter((j) => j.status === 'paused').length;
+
+  const pendingTicketsCount = tickets.filter((tk) => tk.status === 'pending').length;
 
   const customOtherSuggestions = Array.from(
     new Set(
@@ -520,9 +560,137 @@ export const AdminDashboardPage: React.FC = () => {
           <Tags className="w-4 h-4" />
           <span>Rubros y Actividades ({industriesCatalog.length})</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('tickets')}
+          className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+            activeTab === 'tickets'
+              ? 'bg-brand-600 text-white'
+              : 'bg-white text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <HelpCircle className="w-4 h-4" />
+          <span>Consultas de Comercios ({tickets.length})</span>
+          {pendingTicketsCount > 0 && (
+            <span className="ml-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-600 text-white">
+              {pendingTicketsCount}
+            </span>
+          )}
+        </button>
       </div>
 
-      {activeTab === 'industries' ? (
+      {activeTab === 'tickets' ? (
+        /* Pestaña de Consultas y Pedidos enviados por los Comercios */
+        <div className="space-y-4">
+          {tickets.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
+              Todavía no hay consultas ni pedidos de rubros/puestos enviados por los comercios.
+            </div>
+          ) : (
+            tickets.map((tk) => (
+              <div
+                key={tk.id}
+                className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                          tk.status === 'resolved'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-900'
+                        }`}
+                      >
+                        {tk.status === 'resolved' ? 'Resuelta' : 'Pendiente de respuesta'}
+                      </span>
+                      <span className="text-xs font-bold text-brand-700">{tk.category}</span>
+                    </div>
+                    <h3 className="text-base font-bold text-slate-900 mt-1">
+                      {tk.trade_name}{' '}
+                      {tk.contact_person_name ? `· (${tk.contact_person_name})` : ''}
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      {tk.locality ? `${tk.locality}, ${tk.district} · ` : ''}
+                      {tk.employer_email}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {tk.employer_phone && (
+                      <a
+                        href={buildWhatsAppUrl(tk.employer_phone)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span>Responder por WhatsApp</span>
+                      </a>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleReplyTicket(
+                          tk.id,
+                          tk.admin_reply || '',
+                          tk.status === 'resolved' ? 'pending' : 'resolved'
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>
+                        {tk.status === 'resolved' ? 'Reabrir como Pendiente' : 'Marcar Resuelta'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 whitespace-pre-line">
+                  {tk.message}
+                </div>
+
+                {tk.admin_reply && (
+                  <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
+                    <p className="font-bold text-emerald-800">Tu respuesta enviada:</p>
+                    <p className="text-sm whitespace-pre-line">{tk.admin_reply}</p>
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <input
+                    type="text"
+                    value={replyByTicket[tk.id] || ''}
+                    onChange={(e) =>
+                      setReplyByTicket((prev) => ({ ...prev, [tk.id]: e.target.value }))
+                    }
+                    placeholder="Escribir respuesta para que el comercio la vea en su panel y por correo..."
+                    className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm focus:border-brand-600 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={
+                      replyingTicketId === tk.id || !(replyByTicket[tk.id] || '').trim()
+                    }
+                    onClick={() =>
+                      handleReplyTicket(tk.id, replyByTicket[tk.id] || '', 'resolved')
+                    }
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs font-bold shrink-0"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>
+                      {replyingTicketId === tk.id ? 'Enviando...' : 'Responder al Comercio'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : activeTab === 'industries' ? (
         /* Pestaña Gestor de Rubros y Actividades */
         <div className="space-y-6">
           {customOtherSuggestions.length > 0 && (
@@ -649,8 +817,30 @@ export const AdminDashboardPage: React.FC = () => {
       ) : (
         /* Diseño 20%-25% Filtros a la izquierda / 75%-80% Tarjetas una debajo de la otra a la derecha */
         <div className="flex flex-col lg:flex-row items-start gap-6">
+          <div className="w-full lg:hidden flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen((prev) => !prev)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-800 shadow-sm"
+            >
+              <SlidersHorizontal className="w-4 h-4 text-brand-600" />
+              <span>{mobileFiltersOpen ? 'Ocultar Filtros' : 'Mostrar Filtros'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="text-xs font-semibold text-brand-600 hover:underline"
+            >
+              Ver todos
+            </button>
+          </div>
+
           {/* Columna Izquierda (Filtros del Administrador) */}
-          <aside className="w-full lg:w-[24%] shrink-0 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-4">
+          <aside
+            className={`w-full lg:w-[24%] shrink-0 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-4 ${
+              mobileFiltersOpen ? 'block' : 'hidden lg:block'
+            }`}
+          >
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-slate-900">Filtros</h2>
               <button
@@ -767,7 +957,7 @@ export const AdminDashboardPage: React.FC = () => {
                         {cand.locality}, {cand.district}
                       </span>
                       <div className="flex items-center gap-2">
-                        {cand.cv_path && (
+                        {(cand.safe_cv_path || cand.cv_path) && (
                           <span className="text-xs font-semibold text-brand-700 inline-flex items-center gap-1">
                             <FileText className="w-3.5 h-3.5" /> Con CV
                           </span>
@@ -924,9 +1114,9 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {detailModal.item.cv_path && (
+              {(detailModal.item.safe_cv_path || detailModal.item.cv_path) && (
                 <a
-                  href={detailModal.item.cv_path}
+                  href={detailModal.item.safe_cv_path || detailModal.item.cv_path}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-50 text-brand-800 font-semibold text-xs border border-brand-200"
@@ -938,9 +1128,9 @@ export const AdminDashboardPage: React.FC = () => {
 
               {(detailModal.item.phone || detailModal.item.employer_phone) && (
                 <a
-                  href={`https://wa.me/549${
+                  href={buildWhatsAppUrl(
                     detailModal.item.phone || detailModal.item.employer_phone
-                  }`}
+                  )}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold text-xs"

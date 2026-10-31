@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
 import { UserRole } from '../types/database';
+import { supabase } from '../lib/supabase';
 
 export interface SessionUser {
   id: string;
@@ -51,9 +52,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    const currentToken = token;
     setToken(null);
     setUser(null);
     localStorage.removeItem(STORAGE_KEY);
+    if (currentToken) {
+      supabase.rpc('logout_user_session', { p_token: currentToken }).then(() => {});
+    }
   };
 
   return (
