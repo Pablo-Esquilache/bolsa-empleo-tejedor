@@ -1,10 +1,18 @@
 import React from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Briefcase, Users, LogIn } from 'lucide-react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Briefcase, Users, LogIn, UserCircle, Building2, LogOut } from 'lucide-react';
 import { APP_NAME } from '../../lib/constants';
+import { useAuth } from '../../context/AuthContext';
 
 export const MainLayout: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -24,7 +32,7 @@ export const MainLayout: React.FC = () => {
             </div>
           </Link>
 
-          <nav className="flex items-center gap-2 sm:gap-4">
+          <nav className="flex items-center gap-2 sm:gap-3">
             <Link
               to="/vacantes"
               className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -34,7 +42,7 @@ export const MainLayout: React.FC = () => {
               }`}
             >
               <Briefcase className="w-4 h-4" />
-              <span>Búsquedas</span>
+              <span className="hidden xs:inline">Búsquedas</span>
             </Link>
 
             <Link
@@ -46,16 +54,47 @@ export const MainLayout: React.FC = () => {
               }`}
             >
               <Users className="w-4 h-4" />
-              <span>Postulantes</span>
+              <span className="hidden xs:inline">Postulantes</span>
             </Link>
 
-            <Link
-              to="/ingresar"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold shadow-sm transition-colors"
-            >
-              <LogIn className="w-4 h-4" />
-              <span>Ingresar</span>
-            </Link>
+            {user ? (
+              <div className="flex items-center gap-2">
+                {user.role === 'employer' ? (
+                  <Link
+                    to="/mi-comercio"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs sm:text-sm font-bold shadow-sm transition-colors"
+                  >
+                    <Building2 className="w-4 h-4" />
+                    <span>Mi Comercio</span>
+                  </Link>
+                ) : (
+                  <Link
+                    to="/mi-perfil"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs sm:text-sm font-semibold shadow-sm transition-colors"
+                  >
+                    <UserCircle className="w-4 h-4" />
+                    <span>Mi Perfil</span>
+                  </Link>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  title="Cerrar sesión"
+                  className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/ingresar"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold shadow-sm transition-colors"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Ingresar</span>
+              </Link>
+            )}
           </nav>
         </div>
       </header>

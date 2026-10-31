@@ -1,18 +1,370 @@
-import React, { useState } from 'react';
-import { Users, Building2, Briefcase, PauseCircle, Tags, Plus } from 'lucide-react';
-import { INITIAL_INDUSTRIES } from '../lib/constants';
+import React, { useEffect, useState } from 'react';
+import {
+  Users,
+  Building2,
+  Briefcase,
+  PauseCircle,
+  Tags,
+  Plus,
+  Search,
+  MapPin,
+  FileText,
+  MessageCircle,
+  Trash2,
+  PlayCircle,
+  X,
+  KeyRound,
+  Mail,
+} from 'lucide-react';
+import {
+  AVAILABILITY_OPTIONS,
+  EDUCATION_LEVELS,
+  INITIAL_INDUSTRIES,
+  WORK_SITUATIONS,
+} from '../lib/constants';
+import { ChipSelector } from '../components/ui/ChipSelector';
+import { LocationSelector, LocationValue } from '../components/ui/LocationSelector';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
+import { buildOtpEmailHtml, sendTransactionalEmail } from '../lib/emailService';
+import { IndustryItem } from '../types/database';
 
 export const AdminDashboardPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'candidates' | 'employers' | 'jobs' | 'industries'>('candidates');
+  const { token, user, setSession } = useAuth();
+
+  // Estado de login de Administrador si no está logueado
+  const [adminEmail, setAdminEmail] = useState('pabloesquilache@gmail.com');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [devCode, setDevCode] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Datos del tablero
+  const [activeTab, setActiveTab] = useState<'candidates' | 'employers' | 'jobs' | 'industries'>(
+    'candidates'
+  );
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [employers, setEmployers] = useState<any[]>([]);
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [industriesCatalog, setIndustriesCatalog] = useState<IndustryItem[]>(INITIAL_INDUSTRIES);
+  const [loadingData, setLoadingData] = useState(false);
+
+  // Filtros compartidos del Administrador
+  const [searchQuery, setSearchQuery] = useState('');
+  const [locationFilter, setLocationFilter] = useState<LocationValue>({
+    province: '',
+    district: '',
+    locality: '',
+  });
+  const [selectedSituations, setSelectedSituations] = useState<string[]>([]);
+  const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+  const [selectedAvailability, setSelectedAvailability] = useState<string[]>([]);
+  const [selectedEducation, setSelectedEducation] = useState<string[]>([]);
+
+  // Pop-up de detalle
+  const [detailModal, setDetailModal] = useState<{
+    type: 'candidate' | 'employer' | 'job';
+    item: any;
+  } | null>(null);
+
+  // Nuevo rubro / puestos
+  const [newIndustryName, setNewIndustryName] = useState('');
+  const [newIndustryPositions, setNewIndustryPositions] = useState('');
+
+  const isAdmin =
+    Boolean(token && user) &&
+    (user?.role === 'admin' || user?.email.toLowerCase() === 'pabloesquilache@gmail.com');
+
+  const fetchAdminData = async (currentToken: string) => {
+    setLoadingData(true);
+    try {
+      const { data: indData } = await supabase
+        .from('industries')
+        .select('*')
+        .order('sort_order', { ascending: true });
+      if (indData && indData.length > 0) setIndustriesCatalog(indData as IndustryItem[]);
+
+      const { data, error } = await supabase.rpc('admin_get_full_dashboard', {
+        p_token: currentToken,
+      });
+
+      if (!error && data) {
+        setCandidates(data.candidates || []);
+        setEmployers(data.employers || []);
+        setJobs(data.jobs || []);
+      }
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin && token) {
+      fetchAdminData(token);
+    }
+  }, [isAdmin, token]);
+
+  const handleAdminSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError(null);
+    setDevCode(null);
+
+    try {
+      const { data, error } = await supabase.rpc('create_otp_challenge', {
+        p_email: adminEmail.trim(),
+        p_role: 'admin',
+      });
+      if (error) throw new Error(error.message);
+
+      const sent = await sendTransactionalEmail({
+        toEmail: adminEmail.trim(),
+        subject: `Código de Administrador: ${data.code} — Bolsa de Empleo Tejedor`,
+        htmlContent: buildOtpEmailHtml(data.code, 'Panel de Administración'),
+      });
+      if (!sent) setDevCode(data.code);
+      setOtpSent(true);
+    } catch (err: any) {
+      setAuthError(err.message || 'Error al generar código.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleAdminVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError(null);
+
+    try {
+      const { data, error } = await supabase.rpc('verify_otp_code', {
+        p_email: adminEmail.trim(),
+        p_code: otpCode.trim(),
+        p_role: 'admin',
+      });
+      if (error) throw new Error(error.message);
+      setSession(data.token, data.user);
+    } catch (err: any) {
+      setAuthError(err.message || 'Código inválido.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleModerate = async (
+    targetType: 'profile' | 'job',
+    targetId: string,
+    action: 'pause' | 'activate' | 'delete'
+  ) => {
+    if (!token) return;
+    if (action === 'delete' && !window.confirm('¿Seguro que querés eliminar este registro?')) {
+      return;
+    }
+
+    const { error } = await supabase.rpc('admin_moderate_item', {
+      p_token: token,
+      p_target_type: targetType,
+      p_target_id: targetId,
+      p_action: action,
+    });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setDetailModal(null);
+    await fetchAdminData(token);
+  };
+
+  const handleSaveIndustry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !newIndustryName.trim()) return;
+
+    const positionsArray = newIndustryPositions
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const { error } = await supabase.rpc('admin_upsert_industry', {
+      p_token: token,
+      p_name: newIndustryName.trim(),
+      p_positions: positionsArray,
+    });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setNewIndustryName('');
+    setNewIndustryPositions('');
+    await fetchAdminData(token);
+  };
+
+  if (!isAdmin) {
+    return (
+      <div className="max-w-md mx-auto py-12">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-5">
+          <div className="text-center space-y-1">
+            <h2 className="text-xl font-bold text-slate-900">Acceso Administrador</h2>
+            <p className="text-xs text-slate-500">
+              Ingresá con tu correo de administrador y el código de 6 dígitos.
+            </p>
+          </div>
+
+          {authError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800">
+              {authError}
+            </div>
+          )}
+
+          {!otpSent ? (
+            <form onSubmit={handleAdminSendOtp} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Email de Administrador
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                  <input
+                    type="email"
+                    required
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold"
+              >
+                {authLoading ? 'Enviando código...' : 'Enviar código de 6 dígitos'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleAdminVerifyOtp} className="space-y-4">
+              {devCode && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                  Modo prueba local — Código: <strong>{devCode}</strong>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Código de 6 dígitos
+                </label>
+                <div className="relative">
+                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                  <input
+                    type="text"
+                    maxLength={6}
+                    required
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-lg font-bold tracking-widest"
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={authLoading || otpCode.length !== 6}
+                className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-sm font-bold"
+              >
+                {authLoading ? 'Verificando...' : 'Entrar al Panel /admin'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Filtrado de Postulantes en /admin
+  const filteredCandidates = candidates.filter((cand) => {
+    if (locationFilter.province && cand.province !== locationFilter.province) return false;
+    if (locationFilter.district && cand.district !== locationFilter.district) return false;
+    if (locationFilter.locality && cand.locality !== locationFilter.locality) return false;
+
+    if (selectedSituations.length > 0) {
+      const label =
+        cand.work_situation === 'Employed_seeking_change'
+          ? 'Tengo trabajo, pero busco cambiar o sumar horas'
+          : 'Estoy buscando trabajo';
+      if (!selectedSituations.includes(label)) return false;
+    }
+
+    if (selectedIndustries.length > 0) {
+      const cInds: string[] = cand.industries || [];
+      if (!selectedIndustries.some((i) => cInds.includes(i))) return false;
+    }
+
+    if (selectedAvailability.length > 0) {
+      const cAv: string[] = cand.availability || [];
+      if (!selectedAvailability.some((a) => cAv.includes(a))) return false;
+    }
+
+    if (selectedEducation.length > 0 && !selectedEducation.includes(cand.education_level)) {
+      return false;
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const text = `${cand.first_name} ${cand.last_name} ${cand.email} ${cand.phone} ${(
+        cand.positions || []
+      ).join(' ')}`.toLowerCase();
+      if (!text.includes(q)) return false;
+    }
+    return true;
+  });
+
+  // Filtrado de Comercios en /admin
+  const filteredEmployers = employers.filter((emp) => {
+    if (locationFilter.province && emp.province !== locationFilter.province) return false;
+    if (locationFilter.district && emp.district !== locationFilter.district) return false;
+    if (locationFilter.locality && emp.locality !== locationFilter.locality) return false;
+    if (selectedIndustries.length > 0 && !selectedIndustries.includes(emp.industry)) return false;
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const text = `${emp.trade_name} ${emp.legal_name || ''} ${emp.contact_person_name || ''} ${
+        emp.email || ''
+      }`.toLowerCase();
+      if (!text.includes(q)) return false;
+    }
+    return true;
+  });
+
+  // Filtrado de Búsquedas en /admin
+  const filteredJobs = jobs.filter((job) => {
+    if (locationFilter.province && job.province !== locationFilter.province) return false;
+    if (locationFilter.district && job.district !== locationFilter.district) return false;
+    if (locationFilter.locality && job.locality !== locationFilter.locality) return false;
+    if (selectedIndustries.length > 0 && !selectedIndustries.includes(job.industry)) return false;
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const text = `${job.title} ${job.trade_name} ${job.description}`.toLowerCase();
+      if (!text.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const pausedCount =
+    candidates.filter((c) => c.account_status === 'paused').length +
+    employers.filter((e) => e.account_status === 'paused').length +
+    jobs.filter((j) => j.status === 'paused').length;
 
   return (
     <div className="space-y-6">
-      {/* Tarjetas de resumen superior */}
+      {/* 1. Tarjetas de Resumen Superior */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold uppercase text-slate-500">Postulantes Inscritos</p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-1">0</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-1">{candidates.length}</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center">
             <Users className="w-6 h-6" />
@@ -22,7 +374,7 @@ export const AdminDashboardPage: React.FC = () => {
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold uppercase text-slate-500">Comercios Inscritos</p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-1">0</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-1">{employers.length}</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
             <Building2 className="w-6 h-6" />
@@ -32,7 +384,9 @@ export const AdminDashboardPage: React.FC = () => {
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold uppercase text-slate-500">Búsquedas Activas</p>
-            <p className="text-2xl font-extrabold text-emerald-700 mt-1">0</p>
+            <p className="text-2xl font-extrabold text-emerald-700 mt-1">
+              {jobs.filter((j) => j.status === 'active').length}
+            </p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
             <Briefcase className="w-6 h-6" />
@@ -42,7 +396,7 @@ export const AdminDashboardPage: React.FC = () => {
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold uppercase text-slate-500">Pausados / Moderados</p>
-            <p className="text-2xl font-extrabold text-rose-700 mt-1">0</p>
+            <p className="text-2xl font-extrabold text-rose-700 mt-1">{pausedCount}</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center">
             <PauseCircle className="w-6 h-6" />
@@ -50,7 +404,7 @@ export const AdminDashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Pestañas de navegación del Administrador */}
+      {/* 2. Pestañas del Administrador */}
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
         <button
           type="button"
@@ -61,8 +415,9 @@ export const AdminDashboardPage: React.FC = () => {
               : 'bg-white text-slate-700 hover:bg-slate-200'
           }`}
         >
-          Postulantes Inscritos
+          Postulantes Inscritos ({candidates.length})
         </button>
+
         <button
           type="button"
           onClick={() => setActiveTab('employers')}
@@ -72,8 +427,9 @@ export const AdminDashboardPage: React.FC = () => {
               : 'bg-white text-slate-700 hover:bg-slate-200'
           }`}
         >
-          Comercios y Empresas
+          Comercios Inscritos ({employers.length})
         </button>
+
         <button
           type="button"
           onClick={() => setActiveTab('jobs')}
@@ -83,8 +439,9 @@ export const AdminDashboardPage: React.FC = () => {
               : 'bg-white text-slate-700 hover:bg-slate-200'
           }`}
         >
-          Búsquedas Laborales
+          Búsquedas Laborales ({jobs.length})
         </button>
+
         <button
           type="button"
           onClick={() => setActiveTab('industries')}
@@ -95,46 +452,233 @@ export const AdminDashboardPage: React.FC = () => {
           }`}
         >
           <Tags className="w-4 h-4" />
-          <span>Rubros y Puestos ({INITIAL_INDUSTRIES.length})</span>
+          <span>Rubros y Actividades ({industriesCatalog.length})</span>
         </button>
       </div>
 
-      {/* Vista del catálogo de rubros precargados */}
-      {activeTab === 'industries' ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Rubros y Puestos Sugeridos</h2>
-              <p className="text-xs text-slate-500">
-                Podés agregar nuevos rubros u oficios para que aparezcan como botones cliqueables.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Nuevo Rubro</span>
-            </button>
+      {/* 3. Buscador y Filtros Cliqueables del Administrador */}
+      {activeTab !== 'industries' && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por nombre, comercio, responsable, teléfono, email o puesto..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:border-brand-600 focus:outline-none"
+            />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {INITIAL_INDUSTRIES.map((industry) => (
-              <div
-                key={industry.id}
-                className="rounded-xl border border-slate-200 p-4 space-y-2 bg-slate-50/50"
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-slate-900 text-sm">{industry.name}</h3>
-                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">
-                    Activo
+          <LocationSelector
+            value={locationFilter}
+            onChange={setLocationFilter}
+            allowAllOption={true}
+          />
+
+          <ChipSelector
+            label="Filtrar por Rubro"
+            options={industriesCatalog.map((i) => i.name)}
+            selected={selectedIndustries}
+            onChange={setSelectedIndustries}
+          />
+
+          {activeTab === 'candidates' && (
+            <>
+              <ChipSelector
+                label="Situación Laboral"
+                options={WORK_SITUATIONS.map((w) => w.label)}
+                selected={selectedSituations}
+                onChange={setSelectedSituations}
+              />
+
+              <ChipSelector
+                label="Disponibilidad Horaria"
+                options={AVAILABILITY_OPTIONS}
+                selected={selectedAvailability}
+                onChange={setSelectedAvailability}
+              />
+
+              <ChipSelector
+                label="Nivel de Formación"
+                options={EDUCATION_LEVELS}
+                selected={selectedEducation}
+                onChange={setSelectedEducation}
+              />
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 4. Listado de Tarjetas según Pestaña */}
+      {loadingData ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
+          Cargando base de datos...
+        </div>
+      ) : activeTab === 'candidates' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredCandidates.map((cand) => (
+            <div
+              key={cand.id}
+              onClick={() => setDetailModal({ type: 'candidate', item: cand })}
+              className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-brand-500 cursor-pointer transition-all space-y-3"
+            >
+              <div className="flex items-center justify-between">
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                    cand.account_status === 'active'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}
+                >
+                  {cand.account_status === 'active' ? 'Activo' : 'Pausado'}
+                </span>
+                {cand.cv_path && (
+                  <span className="text-xs font-semibold text-brand-700 inline-flex items-center gap-1">
+                    <FileText className="w-3.5 h-3.5" /> Con CV
                   </span>
-                </div>
+                )}
+              </div>
+
+              <div>
+                <h3 className="font-bold text-slate-900">
+                  {cand.first_name} {cand.last_name}
+                </h3>
+                <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                  <MapPin className="w-3.5 h-3.5" />
+                  {cand.locality}, {cand.district}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-1">
+                {(cand.industries || []).slice(0, 3).map((ind: string) => (
+                  <span
+                    key={ind}
+                    className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px]"
+                  >
+                    {ind}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : activeTab === 'employers' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredEmployers.map((emp) => (
+            <div
+              key={emp.id}
+              onClick={() => setDetailModal({ type: 'employer', item: emp })}
+              className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-brand-500 cursor-pointer transition-all space-y-3"
+            >
+              <div className="flex items-center justify-between">
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                    emp.account_status === 'active'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}
+                >
+                  {emp.account_status === 'active' ? 'Activo' : 'Pausado'}
+                </span>
+                <span className="text-xs text-slate-500">{emp.jobs_count || 0} búsquedas</span>
+              </div>
+
+              <div>
+                <h3 className="font-bold text-slate-900">{emp.trade_name}</h3>
+                <p className="text-xs text-slate-600">{emp.industry}</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {emp.locality}, {emp.district}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : activeTab === 'jobs' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredJobs.map((job) => (
+            <div
+              key={job.id}
+              onClick={() => setDetailModal({ type: 'job', item: job })}
+              className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-brand-500 cursor-pointer transition-all space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                    job.status === 'active'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}
+                >
+                  {job.status === 'active' ? 'Activa' : 'Pausada'}
+                </span>
+                <span className="text-xs text-slate-500">{job.trade_name}</span>
+              </div>
+              <h3 className="font-bold text-slate-900">{job.title}</h3>
+              <p className="text-xs text-slate-500">
+                {job.locality}, {job.district} · {job.industry}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* Pestaña Gestor de Rubros y Actividades */
+        <div className="space-y-6">
+          <form
+            onSubmit={handleSaveIndustry}
+            className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4"
+          >
+            <h2 className="text-lg font-bold text-slate-900">
+              Incorporar o Actualizar Rubro y Puestos Sugeridos
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nombre del Rubro *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newIndustryName}
+                  onChange={(e) => setNewIndustryName(e.target.value)}
+                  placeholder="Ej.: Metalúrgica y Talleres"
+                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Puestos sugeridos (separados por coma)
+                </label>
+                <input
+                  type="text"
+                  value={newIndustryPositions}
+                  onChange={(e) => setNewIndustryPositions(e.target.value)}
+                  placeholder="Ej.: Tornero, Soldador, Ayudante de taller"
+                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Guardar Rubro</span>
+            </button>
+          </form>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {industriesCatalog.map((ind) => (
+              <div
+                key={ind.id}
+                className="bg-white rounded-2xl border border-slate-200 p-5 space-y-2"
+              >
+                <h3 className="font-bold text-slate-900 text-sm">{ind.name}</h3>
                 <div className="flex flex-wrap gap-1.5">
-                  {industry.suggested_positions.map((pos) => (
+                  {(ind.suggested_positions || []).map((pos) => (
                     <span
                       key={pos}
-                      className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs text-slate-700"
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 text-xs text-slate-700"
                     >
                       {pos}
                     </span>
@@ -144,14 +688,163 @@ export const AdminDashboardPage: React.FC = () => {
             ))}
           </div>
         </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-2">
-          <h2 className="text-lg font-bold text-slate-900">
-            Panel de {activeTab === 'candidates' ? 'Postulantes' : activeTab === 'employers' ? 'Comercios' : 'Búsquedas'}
-          </h2>
-          <p className="text-sm text-slate-600 max-w-lg mx-auto">
-            Acá vas a ver las tarjetas con buscador y los mismos filtros cliqueables. Al tocar una tarjeta se abrirá el Pop-up con toda la ficha, el CV en PDF y los botones de Pausar o Eliminar.
-          </p>
+      )}
+
+      {/* 5. Pop-up (Modal) de Detalle y Moderación para Postulante, Comercio o Búsqueda */}
+      {detailModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-xl font-bold text-slate-900">
+                {detailModal.type === 'candidate'
+                  ? `${detailModal.item.first_name} ${detailModal.item.last_name}`
+                  : detailModal.type === 'employer'
+                  ? detailModal.item.trade_name
+                  : detailModal.item.title}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setDetailModal(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-sm text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <p>
+                <strong>Ubicación:</strong> {detailModal.item.locality},{' '}
+                {detailModal.item.district} ({detailModal.item.province})
+              </p>
+              {detailModal.item.email && (
+                <p>
+                  <strong>Email:</strong> {detailModal.item.email}
+                </p>
+              )}
+              {(detailModal.item.phone || detailModal.item.employer_phone) && (
+                <p>
+                  <strong>Teléfono:</strong>{' '}
+                  {detailModal.item.phone || detailModal.item.employer_phone}
+                </p>
+              )}
+              {detailModal.item.contact_person_name && (
+                <p>
+                  <strong>Responsable:</strong> {detailModal.item.contact_person_name}
+                </p>
+              )}
+              {detailModal.item.education_level && (
+                <p>
+                  <strong>Formación:</strong> {detailModal.item.education_level}
+                </p>
+              )}
+              {detailModal.item.custom_other_text && (
+                <p className="text-amber-800 font-semibold">
+                  <strong>Opción "Otro" escrita:</strong> {detailModal.item.custom_other_text}
+                </p>
+              )}
+              {(detailModal.item.bio_short || detailModal.item.description) && (
+                <p className="pt-2 whitespace-pre-line">
+                  {detailModal.item.bio_short || detailModal.item.description}
+                </p>
+              )}
+            </div>
+
+            {/* Acciones directas: Ver CV y Abrir WhatsApp */}
+            <div className="flex flex-wrap gap-2">
+              {detailModal.item.cv_path && (
+                <a
+                  href={detailModal.item.cv_path}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-50 text-brand-800 font-semibold text-xs border border-brand-200"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Abrir CV en PDF</span>
+                </a>
+              )}
+
+              {(detailModal.item.phone || detailModal.item.employer_phone) && (
+                <a
+                  href={`https://wa.me/549${
+                    detailModal.item.phone || detailModal.item.employer_phone
+                  }`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold text-xs"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Contactar por WhatsApp</span>
+                </a>
+              )}
+            </div>
+
+            {/* Botones de Moderación Reactiva: Pausar / Reactivar y Eliminar */}
+            <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
+              {detailModal.type === 'job' ? (
+                <>
+                  {detailModal.item.status === 'active' ? (
+                    <button
+                      type="button"
+                      onClick={() => handleModerate('job', detailModal.item.id, 'pause')}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold"
+                    >
+                      <PauseCircle className="w-4 h-4" />
+                      <span>Pausar Búsqueda</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleModerate('job', detailModal.item.id, 'activate')}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-xs font-bold"
+                    >
+                      <PlayCircle className="w-4 h-4" />
+                      <span>Reactivar Búsqueda</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => handleModerate('job', detailModal.item.id, 'delete')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Eliminar Búsqueda</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  {detailModal.item.account_status === 'active' ? (
+                    <button
+                      type="button"
+                      onClick={() => handleModerate('profile', detailModal.item.id, 'pause')}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold"
+                    >
+                      <PauseCircle className="w-4 h-4" />
+                      <span>Pausar Cuenta</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleModerate('profile', detailModal.item.id, 'activate')}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-xs font-bold"
+                    >
+                      <PlayCircle className="w-4 h-4" />
+                      <span>Reactivar Cuenta</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => handleModerate('profile', detailModal.item.id, 'delete')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Eliminar Cuenta</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
