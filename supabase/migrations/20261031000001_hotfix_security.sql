@@ -16,7 +16,7 @@ ALTER TABLE public.private_server_secrets ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.private_server_secrets FROM public, anon, authenticated;
 
 INSERT INTO public.private_server_secrets (key, value)
-VALUES ('internal_rpc_key', 'bt_srv_9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c')
+VALUES ('internal_rpc_key', 'DEPRECATED_USE_SERVICE_ROLE_KEY')
 ON CONFLICT (key) DO NOTHING;
 
 -- 2. Endurecer email_otp_codes (hash SHA-256, intentos máximos y límite de tasa)

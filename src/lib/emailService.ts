@@ -73,10 +73,20 @@ export function formatWhatsAppNumber(rawPhone: string | null | undefined): strin
   if (digits.startsWith('0')) {
     digits = digits.slice(1);
   }
-  if (digits.length === 12 && digits.slice(4, 6) === '15') {
-    digits = digits.slice(0, 4) + digits.slice(6);
-  } else if (digits.length === 11 && digits.slice(3, 5) === '15') {
+  const threeDigitAreas = [
+    '221', '223', '261', '291', '299', '341', '342', '343',
+    '351', '376', '379', '381', '385', '387', '388',
+  ];
+  if (digits.length === 12 && digits.startsWith('1115')) {
+    digits = '11' + digits.slice(4);
+  } else if (
+    digits.length === 12 &&
+    threeDigitAreas.includes(digits.slice(0, 3)) &&
+    digits.slice(3, 5) === '15'
+  ) {
     digits = digits.slice(0, 3) + digits.slice(5);
+  } else if (digits.length === 12 && digits.slice(4, 6) === '15') {
+    digits = digits.slice(0, 4) + digits.slice(6);
   }
   return digits;
 }

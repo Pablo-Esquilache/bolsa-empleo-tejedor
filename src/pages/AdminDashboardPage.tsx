@@ -159,6 +159,9 @@ export const AdminDashboardPage: React.FC = () => {
         p_role: 'admin',
       });
       if (error) throw new Error(error.message);
+      if (!data || data.ok === false) {
+        throw new Error(data?.error || 'Código inválido o vencido.');
+      }
       setSession(data.token, data.user);
     } catch (err: any) {
       setAuthError(err.message || 'Código inválido.');

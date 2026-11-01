@@ -1,5 +1,4 @@
 const DEFAULT_SUPABASE_URL = 'https://rgqnwlwcbwofreqignjd.supabase.co';
-const SERVER_RPC_KEY = 'bt_srv_9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c';
 
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -14,10 +13,9 @@ export const handler = async (event) => {
     const senderName = process.env.BREVO_SENDER_NAME || 'Bolsa de Empleo Tejedor';
     const senderEmail = process.env.BREVO_SENDER_EMAIL || 'pabloesquilache@gmail.com';
     const supabaseUrl = process.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
-    const supabaseKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!apiKey || !supabaseKey) {
+    if (!apiKey || !serviceRoleKey) {
       return {
         statusCode: 500,
         body: JSON.stringify({ error: 'Servicio de notificaciones no configurado.' }),
@@ -40,14 +38,13 @@ export const handler = async (event) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
         },
         body: JSON.stringify({
           p_token: token,
           p_event_type: eventType,
           p_target_id: targetId,
-          p_server_key: SERVER_RPC_KEY,
         }),
       }
     );

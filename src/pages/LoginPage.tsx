@@ -82,6 +82,10 @@ export const LoginPage: React.FC = () => {
         throw new Error(error.message);
       }
 
+      if (!data || data.ok === false) {
+        throw new Error(data?.error || 'Código incorrecto o vencido.');
+      }
+
       setSession(data.token, data.user);
 
       if (data.user.role === 'employer') {

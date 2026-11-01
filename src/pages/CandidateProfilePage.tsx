@@ -447,8 +447,22 @@ export const CandidateProfilePage: React.FC = () => {
             )}
           </div>
           <p className="text-xs text-slate-500">
-            Formato exclusivo PDF (máximo 5 MB). Podrán verlo los comercios donde te postules.
+            Formato exclusivo PDF (máximo 5 MB). Solo podrán visualizarlo comercios registrados con sesión activa mientras tu perfil esté activo o tengas una postulación vigente.
           </p>
+        </div>
+
+        <div className="bg-slate-100 rounded-2xl border border-slate-200 p-4 text-xs text-slate-700">
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              required
+              defaultChecked={true}
+              className="mt-0.5 w-4 h-4 rounded text-brand-600 focus:ring-brand-500"
+            />
+            <span>
+              <strong>Consentimiento de privacidad (Ley 25.326):</strong> Autorizo que mi perfil laboral, Currículum Vitae y teléfono de contacto por WhatsApp estén disponibles para comercios y empleadores registrados y activos en Bolsa de Empleo Tejedor mientras mi perfil se encuentre activo o me postule a sus búsquedas. Puedo pausar mi perfil en cualquier momento desde el interruptor superior.
+            </span>
+          </label>
         </div>
 
         <button

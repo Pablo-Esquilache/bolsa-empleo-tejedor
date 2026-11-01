@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShieldAlert, FileText, Download, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 export const ViewCvPage: React.FC = () => {
   const { candidateId } = useParams<{ candidateId: string }>();
   const { token, user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
@@ -48,8 +49,6 @@ export const ViewCvPage: React.FC = () => {
           generatedUrl = URL.createObjectURL(blob);
           setBlobUrl(generatedUrl);
           setFilename(data.filename || 'curriculum.pdf');
-        } else if (data?.legacy_url) {
-          setBlobUrl(data.legacy_url);
         } else {
           throw new Error('No se encontró un archivo PDF para este postulante.');
         }
@@ -72,6 +71,14 @@ export const ViewCvPage: React.FC = () => {
     };
   }, [token, user, candidateId]);
 
+  const handleGoBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-16 text-center space-y-3">
@@ -90,15 +97,26 @@ export const ViewCvPage: React.FC = () => {
           <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center mx-auto">
             <ShieldAlert className="w-6 h-6" />
           </div>
-          <h1 className="text-xl font-bold text-slate-900">Acceso Restringido</h1>
+          <h1 className="text-xl font-bold text-slate-900">No disponible</h1>
           <p className="text-sm text-slate-600">{error}</p>
-          <div className="pt-2">
-            <Link
-              to="/ingresar"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold"
-            >
-              <span>Iniciar sesión</span>
-            </Link>
+          <div className="pt-2 flex items-center justify-center gap-3">
+            {!token ? (
+              <Link
+                to="/ingresar"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold"
+              >
+                <span>Iniciar sesión</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={handleGoBack}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Volver atrás</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -121,13 +139,14 @@ export const ViewCvPage: React.FC = () => {
             <Download className="w-4 h-4" />
             <span>Descargar PDF</span>
           </a>
-          <Link
-            to="/"
+          <button
+            type="button"
+            onClick={handleGoBack}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Volver</span>
-          </Link>
+          </button>
         </div>
       </div>
 
