@@ -1,12 +1,17 @@
 export async function requestServerOtp(
   email: string,
-  role: 'candidate' | 'employer' | 'admin'
+  role: 'candidate' | 'employer' | 'admin',
+  turnstileToken: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await fetch('/api/auth-request-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim().toLowerCase(), role }),
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        role,
+        turnstileToken: (turnstileToken || '').trim(),
+      }),
     });
 
     const data = await res.json().catch(() => ({}));
@@ -65,28 +70,22 @@ export function normalizeSearchText(str: string | null | undefined): string {
 export function formatWhatsAppNumber(rawPhone: string | null | undefined): string {
   if (!rawPhone) return '';
   let digits = String(rawPhone).replace(/\D/g, '');
-  if (digits.startsWith('549') && digits.length >= 13) {
+  if (/^549\d{10}$/.test(digits)) {
     digits = digits.slice(3);
-  } else if (digits.startsWith('54') && digits.length >= 12) {
+  } else if (/^54\d{10,12}$/.test(digits)) {
     digits = digits.slice(2);
   }
   if (digits.startsWith('0')) {
     digits = digits.slice(1);
   }
-  const threeDigitAreas = [
-    '221', '223', '261', '291', '299', '341', '342', '343',
-    '351', '376', '379', '381', '385', '387', '388',
-  ];
-  if (digits.length === 12 && digits.startsWith('1115')) {
-    digits = '11' + digits.slice(4);
-  } else if (
-    digits.length === 12 &&
-    threeDigitAreas.includes(digits.slice(0, 3)) &&
-    digits.slice(3, 5) === '15'
-  ) {
-    digits = digits.slice(0, 3) + digits.slice(5);
-  } else if (digits.length === 12 && digits.slice(4, 6) === '15') {
-    digits = digits.slice(0, 4) + digits.slice(6);
+  if (digits.length === 12) {
+    if (digits.slice(0, 2) === '11' && digits.slice(2, 4) === '15') {
+      digits = '11' + digits.slice(4);
+    } else if (digits.slice(3, 5) === '15') {
+      digits = digits.slice(0, 3) + digits.slice(5);
+    } else if (digits.slice(4, 6) === '15') {
+      digits = digits.slice(0, 4) + digits.slice(6);
+    }
   }
   return digits;
 }

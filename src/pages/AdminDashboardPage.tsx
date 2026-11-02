@@ -38,16 +38,19 @@ import {
   requestServerOtp,
 } from '../lib/emailService';
 import { IndustryItem } from '../types/database';
+import { TurnstileWidget } from '../components/ui/TurnstileWidget';
 
 export const AdminDashboardPage: React.FC = () => {
   const { token, user, setSession } = useAuth();
 
   // Estado de login de Administrador si no está logueado
-  const [adminEmail, setAdminEmail] = useState('pabloesquilache@gmail.com');
+  const [adminEmail, setAdminEmail] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileReset, setTurnstileReset] = useState(0);
 
   // Datos del tablero
   const [activeTab, setActiveTab] = useState<
@@ -86,9 +89,7 @@ export const AdminDashboardPage: React.FC = () => {
   const [newIndustryPositions, setNewIndustryPositions] = useState('');
   const [quickPosByInd, setQuickPosByInd] = useState<Record<string, string>>({});
 
-  const isAdmin =
-    Boolean(token && user) &&
-    (user?.role === 'admin' || user?.email.toLowerCase() === 'pabloesquilache@gmail.com');
+  const isAdmin = Boolean(token && user && user.role === 'admin');
 
   const fetchAdminData = async (currentToken: string) => {
     setLoadingData(true);
@@ -131,11 +132,15 @@ export const AdminDashboardPage: React.FC = () => {
 
   const handleAdminSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!turnstileToken) {
+      setAuthError('Completá la verificación anti-bots antes de solicitar el código.');
+      return;
+    }
     setAuthLoading(true);
     setAuthError(null);
 
     try {
-      const res = await requestServerOtp(adminEmail.trim().toLowerCase(), 'admin');
+      const res = await requestServerOtp(adminEmail.trim().toLowerCase(), 'admin', turnstileToken);
       if (!res.ok) {
         throw new Error(res.error || 'No se pudo enviar el código.');
       }
@@ -143,6 +148,7 @@ export const AdminDashboardPage: React.FC = () => {
     } catch (err: any) {
       setAuthError(err.message || 'Error al generar código.');
     } finally {
+      setTurnstileReset((prev) => prev + 1);
       setAuthLoading(false);
     }
   };
@@ -328,14 +334,19 @@ export const AdminDashboardPage: React.FC = () => {
                     required
                     value={adminEmail}
                     onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="admin@correo.com"
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm"
                   />
                 </div>
               </div>
+              <TurnstileWidget
+                onTokenChange={setTurnstileToken}
+                resetSignal={turnstileReset}
+              />
               <button
                 type="submit"
-                disabled={authLoading}
-                className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold"
+                disabled={authLoading || !turnstileToken}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-bold"
               >
                 {authLoading ? 'Enviando código...' : 'Enviar código de 6 dígitos'}
               </button>

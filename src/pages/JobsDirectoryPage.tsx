@@ -187,12 +187,18 @@ export const JobsDirectoryPage: React.FC = () => {
   const handleCancelApplication = async (jobPostId: string) => {
     if (!token) return;
     setApplying(true);
+    setApplyStatus(null);
     try {
-      const { error } = await supabase.rpc('candidate_cancel_application', {
+      const { data, error } = await supabase.rpc('candidate_cancel_application', {
         p_token: token,
         p_job_post_id: jobPostId,
       });
       if (error) throw new Error(error.message);
+      if (data?.ok === false) {
+        throw new Error(
+          data.error || 'Esta postulación ya fue evaluada y no puede retirarse.'
+        );
+      }
       await loadMyApplications(token);
       setApplyStatus('Postulación cancelada.');
     } catch (err: any) {
@@ -251,6 +257,18 @@ export const JobsDirectoryPage: React.FC = () => {
       {activeView === 'my_applications' ? (
         /* Vista de Mis Postulaciones una debajo de la otra */
         <div className="space-y-3">
+          {applyStatus && (
+            <div
+              className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                applyStatus.startsWith('Error:')
+                  ? 'bg-rose-50 border-rose-200 text-rose-800'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              }`}
+            >
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{applyStatus}</span>
+            </div>
+          )}
           {myApplications.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-2">
               <Briefcase className="w-10 h-10 text-slate-400 mx-auto" />

@@ -11,11 +11,11 @@ export const handler = async (event) => {
   try {
     const apiKey = process.env.BREVO_API_KEY;
     const senderName = process.env.BREVO_SENDER_NAME || 'Bolsa de Empleo Tejedor';
-    const senderEmail = process.env.BREVO_SENDER_EMAIL || 'pabloesquilache@gmail.com';
+    const senderEmail = process.env.BREVO_SENDER_EMAIL;
     const supabaseUrl = process.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!apiKey || !serviceRoleKey) {
+    if (!apiKey || !serviceRoleKey || !senderEmail) {
       return {
         statusCode: 500,
         body: JSON.stringify({ error: 'Servicio de notificaciones no configurado.' }),
@@ -58,25 +58,45 @@ export const handler = async (event) => {
       };
     }
 
-    const mailRes = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        accept: 'application/json',
-        'content-type': 'application/json',
-        'api-key': apiKey,
-      },
-      body: JSON.stringify({
-        sender: {
-          name: senderName,
-          email: senderEmail,
+    let mailOk = false;
+    try {
+      const mailRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/json',
+          'api-key': apiKey,
         },
-        to: [{ email: rpcData.to_email }],
-        subject: rpcData.subject,
-        htmlContent: rpcData.html,
-      }),
-    });
+        body: JSON.stringify({
+          sender: {
+            name: senderName,
+            email: senderEmail,
+          },
+          to: [{ email: rpcData.to_email }],
+          subject: rpcData.subject,
+          htmlContent: rpcData.html,
+        }),
+      });
+      mailOk = mailRes.ok;
+    } catch {
+      mailOk = false;
+    }
 
-    if (!mailRes.ok) {
+    if (!mailOk) {
+      // E3d: Si Brevo falla, desmarcar la notificación para que pueda reintentarse
+      await fetch(`${supabaseUrl}/rest/v1/rpc/server_unmark_notification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+        },
+        body: JSON.stringify({
+          p_event_type: eventType,
+          p_target_id: targetId,
+        }),
+      }).catch(() => {});
+
       return {
         statusCode: 502,
         body: JSON.stringify({ error: 'No se pudo entregar el correo.' }),

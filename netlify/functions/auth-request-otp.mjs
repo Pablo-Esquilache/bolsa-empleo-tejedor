@@ -11,16 +11,17 @@ export const handler = async (event) => {
   try {
     const apiKey = process.env.BREVO_API_KEY;
     const senderName = process.env.BREVO_SENDER_NAME || 'Bolsa de Empleo Tejedor';
-    const senderEmail = process.env.BREVO_SENDER_EMAIL || 'pabloesquilache@gmail.com';
+    const senderEmail = process.env.BREVO_SENDER_EMAIL;
     const supabaseUrl = process.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const turnstileSecretKey = process.env.TURNSTILE_SECRET_KEY;
 
-    if (!apiKey || !serviceRoleKey) {
+    if (!apiKey || !serviceRoleKey || !senderEmail || !turnstileSecretKey) {
       return {
         statusCode: 500,
         body: JSON.stringify({
           error:
-            'Falta configurar SUPABASE_SERVICE_ROLE_KEY o BREVO_API_KEY en las variables de entorno del servidor.',
+            'Falta configurar variables de entorno requeridas en el servidor (SUPABASE_SERVICE_ROLE_KEY, BREVO_API_KEY, BREVO_SENDER_EMAIL o TURNSTILE_SECRET_KEY).',
         }),
       };
     }
@@ -32,6 +33,7 @@ export const handler = async (event) => {
     const role = ['candidate', 'employer', 'admin'].includes(body.role)
       ? body.role
       : 'candidate';
+    const turnstileToken = String(body.turnstileToken || '').trim();
 
     if (!cleanEmail || !cleanEmail.includes('@') || cleanEmail.length > 160) {
       return {
@@ -40,10 +42,46 @@ export const handler = async (event) => {
       };
     }
 
+    if (!turnstileToken) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          error: 'Completá la verificación de seguridad anti-bots antes de pedir el código.',
+        }),
+      };
+    }
+
     const clientIp =
       event.headers?.['x-nf-client-connection-ip'] ||
       event.headers?.['x-forwarded-for']?.split(',')[0]?.trim() ||
       'unknown';
+
+    // E4d: Verificar token de Cloudflare Turnstile antes de llamar a server_issue_otp_challenge
+    const verifyParams = new URLSearchParams();
+    verifyParams.append('secret', turnstileSecretKey);
+    verifyParams.append('response', turnstileToken);
+    if (clientIp && clientIp !== 'unknown') {
+      verifyParams.append('remoteip', clientIp);
+    }
+
+    const turnstileRes = await fetch(
+      'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: verifyParams.toString(),
+      }
+    );
+
+    const turnstileData = await turnstileRes.json().catch(() => ({}));
+    if (!turnstileRes.ok || !turnstileData?.success) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          error: 'La verificación anti-bots venció o falló. Intentá nuevamente.',
+        }),
+      };
+    }
 
     const rpcResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/server_issue_otp_challenge`, {
       method: 'POST',

@@ -15,6 +15,7 @@ import { UserRole } from '../types/database';
 import { supabase } from '../lib/supabase';
 import { requestServerOtp } from '../lib/emailService';
 import { useAuth } from '../context/AuthContext';
+import { TurnstileWidget } from '../components/ui/TurnstileWidget';
 
 export const LoginPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -32,6 +33,8 @@ export const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileReset, setTurnstileReset] = useState(0);
 
   const isEmployer = selectedRole === 'employer';
 
@@ -47,11 +50,15 @@ export const LoginPage: React.FC = () => {
     if (e) e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) return;
+    if (!turnstileToken) {
+      setErrorMsg('Completá la verificación anti-bots antes de solicitar el código.');
+      return;
+    }
     setLoading(true);
     setErrorMsg(null);
 
     try {
-      const result = await requestServerOtp(cleanEmail, selectedRole);
+      const result = await requestServerOtp(cleanEmail, selectedRole, turnstileToken);
       if (!result.ok) {
         throw new Error(result.error || 'No se pudo enviar el código de acceso.');
       }
@@ -61,6 +68,7 @@ export const LoginPage: React.FC = () => {
     } catch (err: any) {
       setErrorMsg(err.message || 'No se pudo generar el código de acceso.');
     } finally {
+      setTurnstileReset((prev) => prev + 1);
       setLoading(false);
     }
   };
@@ -202,9 +210,14 @@ export const LoginPage: React.FC = () => {
               </p>
             </div>
 
+            <TurnstileWidget
+              onTokenChange={setTurnstileToken}
+              resetSignal={turnstileReset}
+            />
+
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !turnstileToken}
               className={`w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-sm shadow-sm transition-colors ${
                 isEmployer
                   ? 'bg-slate-900 hover:bg-slate-800 text-white'
@@ -254,6 +267,11 @@ export const LoginPage: React.FC = () => {
               <ArrowRight className="w-4 h-4" />
             </button>
 
+            <TurnstileWidget
+              onTokenChange={setTurnstileToken}
+              resetSignal={turnstileReset}
+            />
+
             <div className="flex items-center justify-between pt-2">
               <button
                 type="button"
@@ -269,7 +287,7 @@ export const LoginPage: React.FC = () => {
 
               <button
                 type="button"
-                disabled={loading || resendCooldown > 0}
+                disabled={loading || resendCooldown > 0 || !turnstileToken}
                 onClick={() => handleSendOtp()}
                 className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline font-semibold disabled:opacity-50"
               >
