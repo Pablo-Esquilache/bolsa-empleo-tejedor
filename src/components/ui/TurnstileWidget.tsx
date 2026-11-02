@@ -27,6 +27,7 @@ interface TurnstileWidgetProps {
 const TURNSTILE_SCRIPT_ID = 'cf-turnstile-script';
 const TURNSTILE_SCRIPT_SRC =
   'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+const DEFAULT_TURNSTILE_SITE_KEY = '0x4AAAAAAFv8amGkAPqCoj4m';
 
 export const TurnstileWidget: React.FC<TurnstileWidgetProps> = ({
   onTokenChange,
@@ -34,22 +35,20 @@ export const TurnstileWidget: React.FC<TurnstileWidgetProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
-  const siteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY || '').trim();
+  const siteKey = (
+    import.meta.env.VITE_TURNSTILE_SITE_KEY || DEFAULT_TURNSTILE_SITE_KEY
+  ).trim();
 
   useEffect(() => {
     if (!siteKey) return;
 
     let cancelled = false;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
 
     const mountWidget = () => {
-      if (cancelled || !containerRef.current || !window.turnstile) return;
+      if (cancelled || !containerRef.current || !window.turnstile) return false;
       if (widgetIdRef.current) {
-        try {
-          window.turnstile.remove(widgetIdRef.current);
-        } catch {
-          // ignore cleanup error
-        }
-        widgetIdRef.current = null;
+        return true;
       }
 
       widgetIdRef.current = window.turnstile.render(containerRef.current, {
@@ -65,11 +64,10 @@ export const TurnstileWidget: React.FC<TurnstileWidgetProps> = ({
           onTokenChange('');
         },
       });
+      return true;
     };
 
-    if (window.turnstile) {
-      mountWidget();
-    } else {
+    if (!mountWidget()) {
       let script = document.getElementById(TURNSTILE_SCRIPT_ID) as HTMLScriptElement | null;
       if (!script) {
         script = document.createElement('script');
@@ -79,24 +77,20 @@ export const TurnstileWidget: React.FC<TurnstileWidgetProps> = ({
         script.defer = true;
         document.head.appendChild(script);
       }
-      const handleLoad = () => mountWidget();
-      script.addEventListener('load', handleLoad);
-      return () => {
-        cancelled = true;
-        script?.removeEventListener('load', handleLoad);
-        if (widgetIdRef.current && window.turnstile) {
-          try {
-            window.turnstile.remove(widgetIdRef.current);
-          } catch {
-            // ignore
-          }
-          widgetIdRef.current = null;
+
+      pollTimer = setInterval(() => {
+        if (mountWidget() && pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
         }
-      };
+      }, 150);
     }
 
     return () => {
       cancelled = true;
+      if (pollTimer) {
+        clearInterval(pollTimer);
+      }
       if (widgetIdRef.current && window.turnstile) {
         try {
           window.turnstile.remove(widgetIdRef.current);
@@ -122,13 +116,13 @@ export const TurnstileWidget: React.FC<TurnstileWidgetProps> = ({
   if (!siteKey) {
     return (
       <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 text-center">
-        Verificación anti-bots pendiente de configurar (<code>VITE_TURNSTILE_SITE_KEY</code>).
+        Verificación anti-bots pendiente de configurar.
       </div>
     );
   }
 
   return (
-    <div className="flex justify-center my-2">
+    <div className="flex justify-center my-2 min-h-[65px]">
       <div ref={containerRef} />
     </div>
   );
