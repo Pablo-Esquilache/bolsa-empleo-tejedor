@@ -27,7 +27,6 @@ interface TurnstileWidgetProps {
 const TURNSTILE_SCRIPT_ID = 'cf-turnstile-script';
 const TURNSTILE_SCRIPT_SRC =
   'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-const DEFAULT_TURNSTILE_SITE_KEY = '0x4AAAAAAFv8amGkAPqCoj4m';
 
 export const TurnstileWidget: React.FC<TurnstileWidgetProps> = ({
   onTokenChange,
@@ -35,9 +34,7 @@ export const TurnstileWidget: React.FC<TurnstileWidgetProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
-  const siteKey = (
-    import.meta.env.VITE_TURNSTILE_SITE_KEY || DEFAULT_TURNSTILE_SITE_KEY
-  ).trim();
+  const siteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY || '').trim();
 
   useEffect(() => {
     if (!siteKey) return;
