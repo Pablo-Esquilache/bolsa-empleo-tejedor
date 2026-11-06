@@ -239,7 +239,7 @@ export const EmployerDashboardPage: React.FC = () => {
     });
   }, [tab, myTickets, user?.id]);
 
-  // Actualizar automáticamente sin necesidad de apretar F5 al cambiar de pestaña, volver a la ventana o cada 12s
+  // Actualizar automáticamente al cambiar de pestaña, volver a la ventana o cada 30s estando en consultas
   useEffect(() => {
     if (!token) return;
 
@@ -259,19 +259,19 @@ export const EmployerDashboardPage: React.FC = () => {
     window.addEventListener('focus', refreshCurrentData);
     document.addEventListener('visibilitychange', refreshCurrentData);
 
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        loadMyTickets(token);
-        if (tab === 'my_jobs') {
-          loadMyJobs(token);
-        }
-      }
-    }, 12_000);
+    const interval =
+      tab === 'admin_support'
+        ? setInterval(() => {
+            if (document.visibilityState === 'visible') {
+              loadMyTickets(token);
+            }
+          }, 30_000)
+        : null;
 
     return () => {
       window.removeEventListener('focus', refreshCurrentData);
       document.removeEventListener('visibilitychange', refreshCurrentData);
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     };
   }, [token, tab]);
 

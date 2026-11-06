@@ -142,11 +142,13 @@ export const AdminDashboardPage: React.FC = () => {
     }
   }, [isAdmin, token]);
 
-  // Actualizar automáticamente sin necesidad de apretar F5 al cambiar de pestaña, volver a la ventana o cada 12s
+  // Actualizar automáticamente al cambiar a la pestaña de consultas, volver a la ventana o cada 30s estando en consultas
   useEffect(() => {
     if (!isAdmin || !token) return;
 
-    fetchAdminData(token, true);
+    if (activeTab === 'tickets') {
+      fetchAdminData(token, true);
+    }
 
     const handleRefresh = () => {
       if (document.visibilityState === 'visible') {
@@ -157,16 +159,19 @@ export const AdminDashboardPage: React.FC = () => {
     window.addEventListener('focus', handleRefresh);
     document.addEventListener('visibilitychange', handleRefresh);
 
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchAdminData(token, true);
-      }
-    }, 12_000);
+    const interval =
+      activeTab === 'tickets'
+        ? setInterval(() => {
+            if (document.visibilityState === 'visible') {
+              fetchAdminData(token, true);
+            }
+          }, 30_000)
+        : null;
 
     return () => {
       window.removeEventListener('focus', handleRefresh);
       document.removeEventListener('visibilitychange', handleRefresh);
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     };
   }, [isAdmin, token, activeTab]);
 
