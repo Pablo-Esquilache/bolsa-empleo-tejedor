@@ -38,6 +38,12 @@ export const LoginPage: React.FC = () => {
 
   const isEmployer = selectedRole === 'employer';
 
+  const formatCooldown = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${String(secs).padStart(2, '0')}`;
+  };
+
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const timer = setInterval(() => {
@@ -64,7 +70,7 @@ export const LoginPage: React.FC = () => {
       }
 
       setOtpSent(true);
-      setResendCooldown(60);
+      setResendCooldown(120);
     } catch (err: any) {
       setErrorMsg(err.message || 'No se pudo generar el código de acceso.');
     } finally {
@@ -210,11 +216,6 @@ export const LoginPage: React.FC = () => {
               </p>
             </div>
 
-            <TurnstileWidget
-              onTokenChange={setTurnstileToken}
-              resetSignal={turnstileReset}
-            />
-
             <button
               type="submit"
               disabled={loading || !turnstileToken}
@@ -267,11 +268,6 @@ export const LoginPage: React.FC = () => {
               <ArrowRight className="w-4 h-4" />
             </button>
 
-            <TurnstileWidget
-              onTokenChange={setTurnstileToken}
-              resetSignal={turnstileReset}
-            />
-
             <div className="flex items-center justify-between pt-2">
               <button
                 type="button"
@@ -279,6 +275,8 @@ export const LoginPage: React.FC = () => {
                   setOtpSent(false);
                   setOtpCode('');
                   setErrorMsg(null);
+                  setResendCooldown(0);
+                  setTurnstileReset((prev) => prev + 1);
                 }}
                 className="text-xs text-slate-600 hover:text-slate-900 font-medium"
               >
@@ -294,13 +292,18 @@ export const LoginPage: React.FC = () => {
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>
                   {resendCooldown > 0
-                    ? `Reenviar en ${resendCooldown}s`
+                    ? `Reenviar en ${formatCooldown(resendCooldown)}`
                     : 'Reenviar código'}
                 </span>
               </button>
             </div>
           </form>
         )}
+
+        <TurnstileWidget
+          onTokenChange={setTurnstileToken}
+          resetSignal={turnstileReset}
+        />
       </div>
     </div>
   );

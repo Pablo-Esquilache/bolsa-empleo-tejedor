@@ -16,6 +16,7 @@ import {
   KeyRound,
   Mail,
   RotateCcw,
+  RefreshCw,
   HelpCircle,
   Send,
   CheckCircle2,
@@ -49,8 +50,23 @@ export const AdminDashboardPage: React.FC = () => {
   const [otpCode, setOtpCode] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [turnstileReset, setTurnstileReset] = useState(0);
+
+  const formatCooldown = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${String(secs).padStart(2, '0')}`;
+  };
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   // Datos del tablero
   const [activeTab, setActiveTab] = useState<
@@ -130,8 +146,10 @@ export const AdminDashboardPage: React.FC = () => {
     setSelectedEducation([]);
   };
 
-  const handleAdminSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAdminSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanEmail = adminEmail.trim().toLowerCase();
+    if (!cleanEmail) return;
     if (!turnstileToken) {
       setAuthError('Completá la verificación anti-bots antes de solicitar el código.');
       return;
@@ -140,11 +158,12 @@ export const AdminDashboardPage: React.FC = () => {
     setAuthError(null);
 
     try {
-      const res = await requestServerOtp(adminEmail.trim().toLowerCase(), 'admin', turnstileToken);
+      const res = await requestServerOtp(cleanEmail, 'admin', turnstileToken);
       if (!res.ok) {
         throw new Error(res.error || 'No se pudo enviar el código.');
       }
       setOtpSent(true);
+      setResendCooldown(120);
     } catch (err: any) {
       setAuthError(err.message || 'Error al generar código.');
     } finally {
@@ -339,10 +358,6 @@ export const AdminDashboardPage: React.FC = () => {
                   />
                 </div>
               </div>
-              <TurnstileWidget
-                onTokenChange={setTurnstileToken}
-                resetSignal={turnstileReset}
-              />
               <button
                 type="submit"
                 disabled={authLoading || !turnstileToken}
@@ -374,12 +389,47 @@ export const AdminDashboardPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={authLoading || otpCode.length !== 6}
-                className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-sm font-bold"
+                className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 text-sm font-bold"
               >
                 {authLoading ? 'Verificando...' : 'Entrar al Panel /admin'}
               </button>
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtpSent(false);
+                    setOtpCode('');
+                    setAuthError(null);
+                    setResendCooldown(0);
+                    setTurnstileReset((prev) => prev + 1);
+                  }}
+                  className="text-xs text-slate-600 hover:text-slate-900 font-medium"
+                >
+                  ← Cambiar correo
+                </button>
+
+                <button
+                  type="button"
+                  disabled={authLoading || resendCooldown > 0 || !turnstileToken}
+                  onClick={() => handleAdminSendOtp()}
+                  className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline font-semibold disabled:opacity-50"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>
+                    {resendCooldown > 0
+                      ? `Reenviar en ${formatCooldown(resendCooldown)}`
+                      : 'Reenviar código'}
+                  </span>
+                </button>
+              </div>
             </form>
           )}
+
+          <TurnstileWidget
+            onTokenChange={setTurnstileToken}
+            resetSignal={turnstileReset}
+          />
         </div>
       </div>
     );
@@ -971,7 +1021,7 @@ export const AdminDashboardPage: React.FC = () => {
                         {cand.locality}, {cand.district}
                       </span>
                       <div className="flex items-center gap-2">
-                        {(cand.safe_cv_path || cand.cv_path) && (
+                        {cand.safe_cv_path && (
                           <span className="text-xs font-semibold text-brand-700 inline-flex items-center gap-1">
                             <FileText className="w-3.5 h-3.5" /> Con CV
                           </span>
@@ -1128,9 +1178,9 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {(detailModal.item.safe_cv_path || detailModal.item.cv_path) && (
+              {detailModal.item.safe_cv_path && (
                 <a
-                  href={detailModal.item.safe_cv_path || detailModal.item.cv_path}
+                  href={detailModal.item.safe_cv_path}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-50 text-brand-800 font-semibold text-xs border border-brand-200"
