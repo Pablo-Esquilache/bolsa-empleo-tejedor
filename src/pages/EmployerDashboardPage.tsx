@@ -96,6 +96,8 @@ export const EmployerDashboardPage: React.FC = () => {
   const [ticketCategory, setTicketCategory] = useState<string>(TICKET_CATEGORIES[0]);
   const [ticketMessage, setTicketMessage] = useState<string>('');
   const [sendingTicket, setSendingTicket] = useState(false);
+  const [replyByTicket, setReplyByTicket] = useState<Record<string, string>>({});
+  const [replyingTicketId, setReplyingTicketId] = useState<string | null>(null);
 
   // Datos del Comercio
   const [tradeName, setTradeName] = useState('');
@@ -455,6 +457,36 @@ export const EmployerDashboardPage: React.FC = () => {
       setMessage({ type: 'err', text: err.message || 'No se pudo enviar la consulta.' });
     } finally {
       setSendingTicket(false);
+    }
+  };
+
+  const handleReplyTicket = async (ticketId: string) => {
+    const replyText = (replyByTicket[ticketId] || '').trim();
+    if (!token || !replyText) return;
+    setReplyingTicketId(ticketId);
+    setMessage(null);
+
+    try {
+      const { error } = await supabase.rpc('employer_reply_admin_ticket', {
+        p_token: token,
+        p_ticket_id: ticketId,
+        p_message: replyText,
+      });
+
+      if (error) throw new Error(error.message);
+
+      notifyServerEvent({
+        token,
+        eventType: 'admin_ticket_created',
+        targetId: ticketId,
+      });
+
+      setReplyByTicket((prev) => ({ ...prev, [ticketId]: '' }));
+      await loadMyTickets(token);
+    } catch (err: any) {
+      setMessage({ type: 'err', text: err.message || 'No se pudo enviar tu respuesta.' });
+    } finally {
+      setReplyingTicketId(null);
     }
   };
 
@@ -1109,12 +1141,65 @@ export const EmployerDashboardPage: React.FC = () => {
                       </span>
                     </div>
 
-                    <p className="text-sm text-slate-800 whitespace-pre-line">{tk.message}</p>
+                    {/* Hilo de mensajes entre el Comercio y el Administrador */}
+                    <div className="space-y-2">
+                      {Array.isArray(tk.messages) && tk.messages.length > 0 ? (
+                        tk.messages.map((msg: any, idx: number) =>
+                          msg.sender === 'admin' ? (
+                            <div
+                              key={idx}
+                              className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1"
+                            >
+                              <p className="font-bold text-emerald-800">Respuesta del Administrador:</p>
+                              <p className="whitespace-pre-line text-sm">{msg.text}</p>
+                            </div>
+                          ) : (
+                            <div
+                              key={idx}
+                              className="p-3 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 space-y-1"
+                            >
+                              <p className="font-bold text-slate-600">Tu mensaje:</p>
+                              <p className="whitespace-pre-line text-sm">{msg.text}</p>
+                            </div>
+                          )
+                        )
+                      ) : (
+                        <>
+                          <p className="text-sm text-slate-800 whitespace-pre-line">{tk.message}</p>
+                          {tk.admin_reply && (
+                            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
+                              <p className="font-bold text-emerald-800">Respuesta del Administrador:</p>
+                              <p className="whitespace-pre-line text-sm">{tk.admin_reply}</p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
 
-                    {tk.admin_reply && (
-                      <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
-                        <p className="font-bold text-emerald-800">Respuesta del Administrador:</p>
-                        <p className="whitespace-pre-line text-sm">{tk.admin_reply}</p>
+                    {tk.status !== 'resolved' && (
+                      <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={replyByTicket[tk.id] || ''}
+                          onChange={(e) =>
+                            setReplyByTicket((prev) => ({ ...prev, [tk.id]: e.target.value }))
+                          }
+                          placeholder="Responder o agregar detalle para el Administrador..."
+                          className="flex-1 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs sm:text-sm focus:border-brand-600 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          disabled={
+                            replyingTicketId === tk.id || !(replyByTicket[tk.id] || '').trim()
+                          }
+                          onClick={() => handleReplyTicket(tk.id)}
+                          className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs font-bold shrink-0"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>
+                            {replyingTicketId === tk.id ? 'Enviando...' : 'Responder'}
+                          </span>
+                        </button>
                       </div>
                     )}
                   </div>

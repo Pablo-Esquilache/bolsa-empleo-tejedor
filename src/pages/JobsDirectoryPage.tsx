@@ -320,14 +320,16 @@ export const JobsDirectoryPage: React.FC = () => {
                     <p className="text-xs text-slate-600">{app.trade_name}</p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleCancelApplication(app.job_post_id)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold self-start sm:self-center"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Cancelar postulación</span>
-                  </button>
+                  {app.status !== 'rejected' && (
+                    <button
+                      type="button"
+                      onClick={() => handleCancelApplication(app.job_post_id)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold self-start sm:self-center"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Cancelar postulación</span>
+                    </button>
+                  )}
                 </div>
               );
             })
@@ -603,15 +605,21 @@ export const JobsDirectoryPage: React.FC = () => {
               </button>
 
               {appliedJobIds.has(selectedJob.id) ? (
-                <button
-                  type="button"
-                  disabled={applying}
-                  onClick={() => handleCancelApplication(selectedJob.id)}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold shadow-sm"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>Cancelar mi postulación</span>
-                </button>
+                myApplications.find((a) => a.job_post_id === selectedJob.id)?.status === 'rejected' ? (
+                  <span className="px-4 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">
+                    Postulación evaluada (No seleccionado)
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={applying}
+                    onClick={() => handleCancelApplication(selectedJob.id)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold shadow-sm"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Cancelar mi postulación</span>
+                  </button>
+                )
               ) : (
                 <button
                   type="button"

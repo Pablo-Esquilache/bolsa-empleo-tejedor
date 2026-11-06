@@ -740,7 +740,7 @@ export const AdminDashboardPage: React.FC = () => {
                         onClick={() =>
                           handleReplyTicket(
                             tk.id,
-                            tk.admin_reply || '',
+                            '',
                             tk.status === 'resolved' ? 'pending' : 'resolved'
                           )
                         }
@@ -754,43 +754,71 @@ export const AdminDashboardPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 whitespace-pre-line">
-                    {tk.message}
+                  {/* Hilo de mensajes entre el Comercio y el Administrador */}
+                  <div className="space-y-2.5">
+                    {Array.isArray(tk.messages) && tk.messages.length > 0 ? (
+                      tk.messages.map((msg: any, idx: number) =>
+                        msg.sender === 'admin' ? (
+                          <div
+                            key={idx}
+                            className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1"
+                          >
+                            <p className="font-bold text-emerald-800">Tu respuesta enviada:</p>
+                            <p className="text-sm whitespace-pre-line">{msg.text}</p>
+                          </div>
+                        ) : (
+                          <div
+                            key={idx}
+                            className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 space-y-1"
+                          >
+                            <p className="font-bold text-slate-600">Mensaje del Comercio:</p>
+                            <p className="text-sm whitespace-pre-line">{msg.text}</p>
+                          </div>
+                        )
+                      )
+                    ) : (
+                      <>
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 whitespace-pre-line">
+                          {tk.message}
+                        </div>
+                        {tk.admin_reply && (
+                          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
+                            <p className="font-bold text-emerald-800">Tu respuesta enviada:</p>
+                            <p className="text-sm whitespace-pre-line">{tk.admin_reply}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
 
-                  {tk.admin_reply && (
-                    <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
-                      <p className="font-bold text-emerald-800">Tu respuesta enviada:</p>
-                      <p className="text-sm whitespace-pre-line">{tk.admin_reply}</p>
+                  {tk.status !== 'resolved' && (
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                      <input
+                        type="text"
+                        value={replyByTicket[tk.id] || ''}
+                        onChange={(e) =>
+                          setReplyByTicket((prev) => ({ ...prev, [tk.id]: e.target.value }))
+                        }
+                        placeholder="Escribir respuesta para el comercio (sigue abierta hasta que toques Marcar Resuelta)..."
+                        className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm focus:border-brand-600 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        disabled={
+                          replyingTicketId === tk.id || !(replyByTicket[tk.id] || '').trim()
+                        }
+                        onClick={() =>
+                          handleReplyTicket(tk.id, replyByTicket[tk.id] || '', 'pending')
+                        }
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs font-bold shrink-0"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>
+                          {replyingTicketId === tk.id ? 'Enviando...' : 'Responder al Comercio'}
+                        </span>
+                      </button>
                     </div>
                   )}
-
-                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                    <input
-                      type="text"
-                      value={replyByTicket[tk.id] || ''}
-                      onChange={(e) =>
-                        setReplyByTicket((prev) => ({ ...prev, [tk.id]: e.target.value }))
-                      }
-                      placeholder="Escribir respuesta para que el comercio la vea en su panel y por correo..."
-                      className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm focus:border-brand-600 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      disabled={
-                        replyingTicketId === tk.id || !(replyByTicket[tk.id] || '').trim()
-                      }
-                      onClick={() =>
-                        handleReplyTicket(tk.id, replyByTicket[tk.id] || '', 'resolved')
-                      }
-                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs font-bold shrink-0"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>
-                        {replyingTicketId === tk.id ? 'Enviando...' : 'Responder al Comercio'}
-                      </span>
-                    </button>
-                  </div>
                 </div>
               ))}
 

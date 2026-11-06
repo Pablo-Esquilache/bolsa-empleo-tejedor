@@ -116,6 +116,23 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 5) Columnas explícitas en admin_get_full_dashboard (sin cp.*, ep.*, jp.* ni cp.cv_path)
 -- ----------------------------------------------------------------------------
+ALTER TABLE public.admin_tickets
+  ADD COLUMN IF NOT EXISTS messages jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+UPDATE public.admin_tickets
+SET messages = CASE
+  WHEN admin_reply IS NOT NULL AND trim(admin_reply) <> '' THEN
+    jsonb_build_array(
+      jsonb_build_object('sender', 'employer', 'text', message, 'created_at', created_at),
+      jsonb_build_object('sender', 'admin', 'text', admin_reply, 'created_at', COALESCE(replied_at, created_at))
+    )
+  ELSE
+    jsonb_build_array(
+      jsonb_build_object('sender', 'employer', 'text', message, 'created_at', created_at)
+    )
+END
+WHERE messages = '[]'::jsonb;
+
 CREATE OR REPLACE FUNCTION public.admin_get_full_dashboard(p_token text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -242,6 +259,7 @@ BEGIN
       at.category,
       at.message,
       at.admin_reply,
+      at.messages,
       at.status,
       at.created_at,
       at.replied_at,
@@ -328,5 +346,192 @@ BEGIN
   VALUES (v_user.id, p_target_id, 'moderate_' || p_target_type || '_' || p_action);
 
   RETURN jsonb_build_object('ok', true);
+END;
+$$;
+
+-- Hilo de conversación ida y vuelta en consultas al Administrador hasta marcar como Resuelta
+CREATE OR REPLACE FUNCTION public.employer_create_admin_ticket(
+  p_token text,
+  p_category text,
+  p_message text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  v_user public.profiles;
+  v_pending_count integer;
+  v_ticket_id uuid;
+  v_clean_msg text := left(trim(COALESCE(p_message, '')), 1000);
+BEGIN
+  v_user := public.get_session_profile(p_token);
+  IF v_user.id IS NULL THEN
+    RAISE EXCEPTION 'Sesión inválida.';
+  END IF;
+
+  IF v_user.role <> 'employer' AND NOT public.is_app_admin(v_user) THEN
+    RAISE EXCEPTION 'Solo las cuentas de Comercio pueden enviar consultas desde este panel.';
+  END IF;
+
+  IF v_clean_msg = '' THEN
+    RAISE EXCEPTION 'Escribí tu consulta o el rubro/puesto que necesitás agregar.';
+  END IF;
+
+  SELECT count(*) INTO v_pending_count
+  FROM public.admin_tickets
+  WHERE employer_id = v_user.id
+    AND status = 'pending';
+
+  IF v_pending_count >= 5 THEN
+    RAISE EXCEPTION 'Ya tenés 5 consultas pendientes de respuesta. Esperá a que el Administrador las responda antes de enviar otra.';
+  END IF;
+
+  INSERT INTO public.admin_tickets (employer_id, category, message, messages, status)
+  VALUES (
+    v_user.id,
+    left(COALESCE(NULLIF(trim(p_category), ''), 'Consulta general'), 100),
+    v_clean_msg,
+    jsonb_build_array(
+      jsonb_build_object('sender', 'employer', 'text', v_clean_msg, 'created_at', now())
+    ),
+    'pending'
+  )
+  RETURNING id INTO v_ticket_id;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'ticket_id', v_ticket_id
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.employer_reply_admin_ticket(
+  p_token text,
+  p_ticket_id uuid,
+  p_message text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  v_user public.profiles;
+  v_ticket public.admin_tickets%ROWTYPE;
+  v_clean_msg text := left(trim(COALESCE(p_message, '')), 1000);
+BEGIN
+  v_user := public.get_session_profile(p_token);
+  IF v_user.id IS NULL THEN
+    RAISE EXCEPTION 'Sesión inválida.';
+  END IF;
+
+  IF v_clean_msg = '' THEN
+    RAISE EXCEPTION 'Escribí tu mensaje para responder.';
+  END IF;
+
+  SELECT * INTO v_ticket
+  FROM public.admin_tickets
+  WHERE id = p_ticket_id
+    AND employer_id = v_user.id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'No se encontró la consulta.';
+  END IF;
+
+  IF v_ticket.status = 'resolved' THEN
+    RAISE EXCEPTION 'Esta consulta ya fue marcada como resuelta. Si tenés otra duda, enviá una consulta nueva.';
+  END IF;
+
+  IF jsonb_array_length(COALESCE(v_ticket.messages, '[]'::jsonb)) >= 30 THEN
+    RAISE EXCEPTION 'Se alcanzó el límite de mensajes en esta consulta.';
+  END IF;
+
+  UPDATE public.admin_tickets
+  SET message = v_clean_msg,
+      messages = COALESCE(v_ticket.messages, '[]'::jsonb) || jsonb_build_array(
+        jsonb_build_object('sender', 'employer', 'text', v_clean_msg, 'created_at', now())
+      ),
+      notified_at = NULL
+  WHERE id = p_ticket_id;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'ticket_id', p_ticket_id
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.employer_get_my_tickets(p_token text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  v_user public.profiles;
+  v_res jsonb;
+BEGIN
+  v_user := public.get_session_profile(p_token);
+  IF v_user.id IS NULL THEN
+    RETURN '[]'::jsonb;
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb) INTO v_res
+  FROM (
+    SELECT
+      id,
+      category,
+      message,
+      admin_reply,
+      messages,
+      status,
+      created_at,
+      replied_at
+    FROM public.admin_tickets
+    WHERE employer_id = v_user.id
+    ORDER BY created_at DESC
+  ) t;
+
+  RETURN v_res;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.admin_reply_ticket(
+  p_token text,
+  p_ticket_id uuid,
+  p_reply text,
+  p_status text DEFAULT 'resolved'
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  v_user public.profiles;
+  v_clean_reply text := left(trim(COALESCE(p_reply, '')), 1000);
+BEGIN
+  v_user := public.get_session_profile(p_token);
+  IF NOT public.is_app_admin(v_user) THEN
+    RAISE EXCEPTION 'Acceso exclusivo para el Administrador.';
+  END IF;
+
+  UPDATE public.admin_tickets
+  SET admin_reply = CASE WHEN v_clean_reply <> '' THEN v_clean_reply ELSE admin_reply END,
+      messages = CASE
+        WHEN v_clean_reply <> '' THEN
+          COALESCE(messages, '[]'::jsonb) || jsonb_build_array(
+            jsonb_build_object('sender', 'admin', 'text', v_clean_reply, 'created_at', now())
+          )
+        ELSE messages
+      END,
+      status = CASE WHEN p_status IN ('pending', 'resolved') THEN p_status ELSE 'resolved' END,
+      replied_at = CASE WHEN v_clean_reply <> '' THEN now() ELSE replied_at END
+  WHERE id = p_ticket_id;
+
+  RETURN jsonb_build_object('ok', true, 'ticket_id', p_ticket_id);
 END;
 $$;
