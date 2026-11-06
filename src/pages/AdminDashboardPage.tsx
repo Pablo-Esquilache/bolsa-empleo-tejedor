@@ -76,6 +76,7 @@ export const AdminDashboardPage: React.FC = () => {
   const [employers, setEmployers] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
+  const [ticketsPage, setTicketsPage] = useState(1);
   const [replyByTicket, setReplyByTicket] = useState<Record<string, string>>({});
   const [replyingTicketId, setReplyingTicketId] = useState<string | null>(null);
   const [industriesCatalog, setIndustriesCatalog] = useState<IndustryItem[]>(INITIAL_INDUSTRIES);
@@ -547,6 +548,13 @@ export const AdminDashboardPage: React.FC = () => {
     jobs.filter((j) => j.status === 'paused').length;
 
   const pendingTicketsCount = tickets.filter((tk) => tk.status === 'pending').length;
+  const TICKETS_PER_PAGE = 5;
+  const totalTicketPages = Math.max(1, Math.ceil(tickets.length / TICKETS_PER_PAGE));
+  const safeTicketsPage = Math.min(ticketsPage, totalTicketPages);
+  const paginatedTickets = tickets.slice(
+    (safeTicketsPage - 1) * TICKETS_PER_PAGE,
+    safeTicketsPage * TICKETS_PER_PAGE
+  );
 
   const customOtherSuggestions = Array.from(
     new Set(
@@ -684,106 +692,132 @@ export const AdminDashboardPage: React.FC = () => {
               Todavía no hay consultas ni pedidos de rubros/puestos enviados por los comercios.
             </div>
           ) : (
-            tickets.map((tk) => (
-              <div
-                key={tk.id}
-                className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                          tk.status === 'resolved'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-900'
-                        }`}
-                      >
-                        {tk.status === 'resolved' ? 'Resuelta' : 'Pendiente de respuesta'}
-                      </span>
-                      <span className="text-xs font-bold text-brand-700">{tk.category}</span>
+            <>
+              {paginatedTickets.map((tk) => (
+                <div
+                  key={tk.id}
+                  className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            tk.status === 'resolved'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-900'
+                          }`}
+                        >
+                          {tk.status === 'resolved' ? 'Resuelta' : 'Pendiente de respuesta'}
+                        </span>
+                        <span className="text-xs font-bold text-brand-700">{tk.category}</span>
+                      </div>
+                      <h3 className="text-base font-bold text-slate-900 mt-1">
+                        {tk.trade_name}{' '}
+                        {tk.contact_person_name ? `· (${tk.contact_person_name})` : ''}
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        {tk.locality ? `${tk.locality}, ${tk.district} · ` : ''}
+                        {tk.employer_email}
+                      </p>
                     </div>
-                    <h3 className="text-base font-bold text-slate-900 mt-1">
-                      {tk.trade_name}{' '}
-                      {tk.contact_person_name ? `· (${tk.contact_person_name})` : ''}
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      {tk.locality ? `${tk.locality}, ${tk.district} · ` : ''}
-                      {tk.employer_email}
-                    </p>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {tk.employer_phone && (
+                        <a
+                          href={buildWhatsAppUrl(tk.employer_phone)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          <span>Responder por WhatsApp</span>
+                        </a>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleReplyTicket(
+                            tk.id,
+                            tk.admin_reply || '',
+                            tk.status === 'resolved' ? 'pending' : 'resolved'
+                          )
+                        }
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>
+                          {tk.status === 'resolved' ? 'Reabrir como Pendiente' : 'Marcar Resuelta'}
+                        </span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {tk.employer_phone && (
-                      <a
-                        href={buildWhatsAppUrl(tk.employer_phone)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
-                      >
-                        <MessageCircle className="w-4 h-4" />
-                        <span>Responder por WhatsApp</span>
-                      </a>
-                    )}
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 whitespace-pre-line">
+                    {tk.message}
+                  </div>
 
+                  {tk.admin_reply && (
+                    <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
+                      <p className="font-bold text-emerald-800">Tu respuesta enviada:</p>
+                      <p className="text-sm whitespace-pre-line">{tk.admin_reply}</p>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                    <input
+                      type="text"
+                      value={replyByTicket[tk.id] || ''}
+                      onChange={(e) =>
+                        setReplyByTicket((prev) => ({ ...prev, [tk.id]: e.target.value }))
+                      }
+                      placeholder="Escribir respuesta para que el comercio la vea en su panel y por correo..."
+                      className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm focus:border-brand-600 focus:outline-none"
+                    />
                     <button
                       type="button"
-                      onClick={() =>
-                        handleReplyTicket(
-                          tk.id,
-                          tk.admin_reply || '',
-                          tk.status === 'resolved' ? 'pending' : 'resolved'
-                        )
+                      disabled={
+                        replyingTicketId === tk.id || !(replyByTicket[tk.id] || '').trim()
                       }
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold"
+                      onClick={() =>
+                        handleReplyTicket(tk.id, replyByTicket[tk.id] || '', 'resolved')
+                      }
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs font-bold shrink-0"
                     >
-                      <CheckCircle2 className="w-4 h-4" />
+                      <Send className="w-3.5 h-3.5" />
                       <span>
-                        {tk.status === 'resolved' ? 'Reabrir como Pendiente' : 'Marcar Resuelta'}
+                        {replyingTicketId === tk.id ? 'Enviando...' : 'Responder al Comercio'}
                       </span>
                     </button>
                   </div>
                 </div>
+              ))}
 
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 whitespace-pre-line">
-                  {tk.message}
-                </div>
-
-                {tk.admin_reply && (
-                  <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
-                    <p className="font-bold text-emerald-800">Tu respuesta enviada:</p>
-                    <p className="text-sm whitespace-pre-line">{tk.admin_reply}</p>
-                  </div>
-                )}
-
-                <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                  <input
-                    type="text"
-                    value={replyByTicket[tk.id] || ''}
-                    onChange={(e) =>
-                      setReplyByTicket((prev) => ({ ...prev, [tk.id]: e.target.value }))
-                    }
-                    placeholder="Escribir respuesta para que el comercio la vea en su panel y por correo..."
-                    className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-xs sm:text-sm focus:border-brand-600 focus:outline-none"
-                  />
+              {totalTicketPages > 1 && (
+                <div className="bg-white rounded-2xl border border-slate-200 px-5 py-3.5 shadow-sm flex items-center justify-between gap-3">
                   <button
                     type="button"
-                    disabled={
-                      replyingTicketId === tk.id || !(replyByTicket[tk.id] || '').trim()
-                    }
-                    onClick={() =>
-                      handleReplyTicket(tk.id, replyByTicket[tk.id] || '', 'resolved')
-                    }
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs font-bold shrink-0"
+                    disabled={safeTicketsPage <= 1}
+                    onClick={() => setTicketsPage((p) => Math.max(1, p - 1))}
+                    className="px-3.5 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
                   >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>
-                      {replyingTicketId === tk.id ? 'Enviando...' : 'Responder al Comercio'}
-                    </span>
+                    ← Anterior
+                  </button>
+                  <span className="text-xs font-semibold text-slate-600">
+                    Página {safeTicketsPage} de {totalTicketPages} ({tickets.length} consultas)
+                  </span>
+                  <button
+                    type="button"
+                    disabled={safeTicketsPage >= totalTicketPages}
+                    onClick={() => setTicketsPage((p) => Math.min(totalTicketPages, p + 1))}
+                    className="px-3.5 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                  >
+                    Siguiente →
                   </button>
                 </div>
-              </div>
-            ))
+              )}
+            </>
           )}
         </div>
       ) : activeTab === 'industries' ? (

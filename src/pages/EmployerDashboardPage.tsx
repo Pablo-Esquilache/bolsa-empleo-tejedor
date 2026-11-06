@@ -91,6 +91,7 @@ export const EmployerDashboardPage: React.FC = () => {
 
   // Consultas al Administrador
   const [myTickets, setMyTickets] = useState<any[]>([]);
+  const [ticketsPage, setTicketsPage] = useState(1);
   const [seenReplies, setSeenReplies] = useState<Record<string, string>>({});
   const [ticketCategory, setTicketCategory] = useState<string>(TICKET_CATEGORIES[0]);
   const [ticketMessage, setTicketMessage] = useState<string>('');
@@ -464,6 +465,13 @@ export const EmployerDashboardPage: React.FC = () => {
   const answeredTicketsCount = myTickets.filter(
     (t) => Boolean(t.admin_reply) && seenReplies[t.id] !== `${t.replied_at || ''}_${t.admin_reply}`
   ).length;
+  const TICKETS_PER_PAGE = 5;
+  const totalTicketPages = Math.max(1, Math.ceil(myTickets.length / TICKETS_PER_PAGE));
+  const safeTicketsPage = Math.min(ticketsPage, totalTicketPages);
+  const paginatedMyTickets = myTickets.slice(
+    (safeTicketsPage - 1) * TICKETS_PER_PAGE,
+    safeTicketsPage * TICKETS_PER_PAGE
+  );
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
@@ -1083,7 +1091,7 @@ export const EmployerDashboardPage: React.FC = () => {
               </p>
             ) : (
               <div className="space-y-3">
-                {myTickets.map((tk) => (
+                {paginatedMyTickets.map((tk) => (
                   <div
                     key={tk.id}
                     className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5"
@@ -1111,6 +1119,30 @@ export const EmployerDashboardPage: React.FC = () => {
                     )}
                   </div>
                 ))}
+
+                {totalTicketPages > 1 && (
+                  <div className="pt-2 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      disabled={safeTicketsPage <= 1}
+                      onClick={() => setTicketsPage((p) => Math.max(1, p - 1))}
+                      className="px-3.5 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                    >
+                      ← Anterior
+                    </button>
+                    <span className="text-xs font-semibold text-slate-600">
+                      Página {safeTicketsPage} de {totalTicketPages} ({myTickets.length} consultas)
+                    </span>
+                    <button
+                      type="button"
+                      disabled={safeTicketsPage >= totalTicketPages}
+                      onClick={() => setTicketsPage((p) => Math.min(totalTicketPages, p + 1))}
+                      className="px-3.5 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                    >
+                      Siguiente →
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

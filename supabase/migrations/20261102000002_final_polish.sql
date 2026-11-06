@@ -268,3 +268,65 @@ BEGIN
   );
 END;
 $$;
+
+-- Proteger la cuenta de Administrador para que no pueda auto-pausarse ni auto-eliminarse por error
+UPDATE public.profiles
+SET status = 'active', deleted_at = NULL, updated_at = now()
+WHERE lower(email) = public.get_admin_email();
+
+CREATE OR REPLACE FUNCTION public.admin_moderate_item(
+  p_token text,
+  p_target_type text,
+  p_target_id uuid,
+  p_action text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  v_user public.profiles;
+  v_target_prof public.profiles%ROWTYPE;
+BEGIN
+  v_user := public.get_session_profile(p_token);
+  IF NOT public.is_app_admin(v_user) THEN
+    RAISE EXCEPTION 'Acceso exclusivo para el Administrador.';
+  END IF;
+
+  IF p_target_type NOT IN ('profile', 'job') OR p_action NOT IN ('pause', 'activate', 'delete') THEN
+    RAISE EXCEPTION 'Parámetros de moderación inválidos.';
+  END IF;
+
+  IF p_target_type = 'profile' THEN
+    SELECT * INTO v_target_prof FROM public.profiles WHERE id = p_target_id;
+    IF p_action IN ('pause', 'delete') AND (
+      p_target_id = v_user.id OR lower(COALESCE(v_target_prof.email, '')) = public.get_admin_email()
+    ) THEN
+      RAISE EXCEPTION 'No podés pausar ni eliminar tu propia cuenta de Administrador.';
+    END IF;
+
+    IF p_action = 'pause' THEN
+      UPDATE public.profiles SET status = 'paused', updated_at = now() WHERE id = p_target_id;
+    ELSIF p_action = 'activate' THEN
+      UPDATE public.profiles SET status = 'active', updated_at = now() WHERE id = p_target_id;
+    ELSIF p_action = 'delete' THEN
+      UPDATE public.profiles SET status = 'deleted', deleted_at = now(), updated_at = now() WHERE id = p_target_id;
+      DELETE FROM public.user_sessions WHERE user_id = p_target_id;
+    END IF;
+  ELSIF p_target_type = 'job' THEN
+    IF p_action = 'pause' THEN
+      UPDATE public.job_posts SET status = 'paused', paused_by_admin = true, updated_at = now() WHERE id = p_target_id;
+    ELSIF p_action = 'activate' THEN
+      UPDATE public.job_posts SET status = 'active', paused_by_admin = false, updated_at = now() WHERE id = p_target_id;
+    ELSIF p_action = 'delete' THEN
+      UPDATE public.job_posts SET status = 'closed', deleted_at = now(), updated_at = now() WHERE id = p_target_id;
+    END IF;
+  END IF;
+
+  INSERT INTO public.access_log (actor_id, target_id, action)
+  VALUES (v_user.id, p_target_id, 'moderate_' || p_target_type || '_' || p_action);
+
+  RETURN jsonb_build_object('ok', true);
+END;
+$$;
