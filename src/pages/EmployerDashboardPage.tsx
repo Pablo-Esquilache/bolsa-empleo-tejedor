@@ -91,6 +91,7 @@ export const EmployerDashboardPage: React.FC = () => {
 
   // Consultas al Administrador
   const [myTickets, setMyTickets] = useState<any[]>([]);
+  const [seenReplies, setSeenReplies] = useState<Record<string, string>>({});
   const [ticketCategory, setTicketCategory] = useState<string>(TICKET_CATEGORIES[0]);
   const [ticketMessage, setTicketMessage] = useState<string>('');
   const [sendingTicket, setSendingTicket] = useState(false);
@@ -187,6 +188,89 @@ export const EmployerDashboardPage: React.FC = () => {
     loadMyJobs(token);
     loadMyTickets(token);
   }, [user, token, navigate]);
+
+  // Cargar respuestas ya leídas por este comercio desde localStorage
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const raw = localStorage.getItem(`bolsa_empleo_seen_ticket_replies_${user.id}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          setSeenReplies(parsed);
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [user?.id]);
+
+  // Cuando el comercio abre la pestaña "Consultas al Administrador", marcar las respuestas actuales como leídas
+  useEffect(() => {
+    if (tab !== 'admin_support' || !user?.id || myTickets.length === 0) return;
+
+    setSeenReplies((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const tk of myTickets) {
+        if (tk.admin_reply) {
+          const sig = `${tk.replied_at || ''}_${tk.admin_reply}`;
+          if (next[tk.id] !== sig) {
+            next[tk.id] = sig;
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        try {
+          localStorage.setItem(
+            `bolsa_empleo_seen_ticket_replies_${user.id}`,
+            JSON.stringify(next)
+          );
+        } catch {
+          // ignore storage errors
+        }
+        return next;
+      }
+      return prev;
+    });
+  }, [tab, myTickets, user?.id]);
+
+  // Actualizar automáticamente sin necesidad de apretar F5 al cambiar de pestaña, volver a la ventana o cada 12s
+  useEffect(() => {
+    if (!token) return;
+
+    if (tab === 'admin_support') {
+      loadMyTickets(token);
+    } else if (tab === 'my_jobs') {
+      loadMyJobs(token);
+    }
+
+    const refreshCurrentData = () => {
+      if (document.visibilityState === 'visible') {
+        loadMyTickets(token);
+        loadMyJobs(token);
+      }
+    };
+
+    window.addEventListener('focus', refreshCurrentData);
+    document.addEventListener('visibilitychange', refreshCurrentData);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadMyTickets(token);
+        if (tab === 'my_jobs') {
+          loadMyJobs(token);
+        }
+      }
+    }, 12_000);
+
+    return () => {
+      window.removeEventListener('focus', refreshCurrentData);
+      document.removeEventListener('visibilitychange', refreshCurrentData);
+      clearInterval(interval);
+    };
+  }, [token, tab]);
 
   const suggestedPositionsForJob =
     industriesCatalog.find((ind) => ind.name === jobIndustry)?.suggested_positions || [];
@@ -377,7 +461,9 @@ export const EmployerDashboardPage: React.FC = () => {
     selectedJobFilter === 'ALL' ? true : job.id === selectedJobFilter
   );
 
-  const answeredTicketsCount = myTickets.filter((t) => Boolean(t.admin_reply)).length;
+  const answeredTicketsCount = myTickets.filter(
+    (t) => Boolean(t.admin_reply) && seenReplies[t.id] !== `${t.replied_at || ''}_${t.admin_reply}`
+  ).length;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">

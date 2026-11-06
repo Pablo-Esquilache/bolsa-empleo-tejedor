@@ -20,12 +20,20 @@ import { TurnstileWidget } from '../components/ui/TurnstileWidget';
 export const LoginPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { setSession } = useAuth();
+  const { setSession, getSessionByRole } = useAuth();
 
   const roleParam = searchParams.get('rol') as UserRole | null;
   const hasExplicitRole = roleParam === 'employer' || roleParam === 'candidate';
   const selectedRole: 'candidate' | 'employer' =
     roleParam === 'employer' ? 'employer' : 'candidate';
+
+  const existingRoleSession = getSessionByRole(selectedRole);
+
+  useEffect(() => {
+    if (existingRoleSession.token && existingRoleSession.user && !searchParams.get('cambiar')) {
+      navigate(selectedRole === 'employer' ? '/postulantes' : '/vacantes', { replace: true });
+    }
+  }, [existingRoleSession.token, existingRoleSession.user, selectedRole, searchParams, navigate]);
 
   const [email, setEmail] = useState('');
   const [otpSent, setOtpSent] = useState(false);

@@ -98,6 +98,26 @@ export const JobsDirectoryPage: React.FC = () => {
     });
   }, [user, token, navigate]);
 
+  useEffect(() => {
+    if (!token) return;
+    if (activeView === 'my_applications') {
+      loadMyApplications(token);
+    }
+
+    const handleRefresh = () => {
+      if (document.visibilityState === 'visible') {
+        loadMyApplications(token);
+      }
+    };
+
+    window.addEventListener('focus', handleRefresh);
+    document.addEventListener('visibilitychange', handleRefresh);
+    return () => {
+      window.removeEventListener('focus', handleRefresh);
+      document.removeEventListener('visibilitychange', handleRefresh);
+    };
+  }, [token, activeView]);
+
   const appliedJobIds = new Set(myApplications.map((a) => a.job_post_id));
 
   const resetFilters = () => {

@@ -2,8 +2,16 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { UserPlus, Building2, Search, Shield, CheckCircle2, ArrowRight } from 'lucide-react';
 import { APP_NAME, INITIAL_INDUSTRIES } from '../lib/constants';
+import { useAuth } from '../context/AuthContext';
 
 export const HomePage: React.FC = () => {
+  const { getSessionByRole } = useAuth();
+  const candidateSession = getSessionByRole('candidate');
+  const employerSession = getSessionByRole('employer');
+
+  const candidateTarget = candidateSession.token ? '/vacantes' : '/ingresar?rol=candidate';
+  const employerTarget = employerSession.token ? '/postulantes' : '/ingresar?rol=employer';
+
   return (
     <div className="space-y-12 pb-12">
       {/* Hero Principal sin cartelito de ubicación arriba */}
@@ -20,7 +28,7 @@ export const HomePage: React.FC = () => {
           {/* Dos grandes tarjetas / botones de elección de rol */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-4 text-left max-w-3xl mx-auto">
             <Link
-              to="/ingresar?rol=candidate"
+              to={candidateTarget}
               className="group bg-white text-slate-900 rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all border-2 border-transparent hover:border-brand-300 flex flex-col justify-between"
             >
               <div className="space-y-3">
@@ -35,13 +43,17 @@ export const HomePage: React.FC = () => {
                 </p>
               </div>
               <div className="mt-6 inline-flex items-center gap-2 text-brand-700 font-semibold text-sm">
-                <span>Ingresar como postulante</span>
+                <span>
+                  {candidateSession.user
+                    ? `Entrar como postulante (${candidateSession.user.email})`
+                    : 'Ingresar como postulante'}
+                </span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             </Link>
 
             <Link
-              to="/ingresar?rol=employer"
+              to={employerTarget}
               className="group bg-slate-900 text-white rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all border-2 border-slate-700 hover:border-amber-400 flex flex-col justify-between"
             >
               <div className="space-y-3">
@@ -56,7 +68,11 @@ export const HomePage: React.FC = () => {
                 </p>
               </div>
               <div className="mt-6 inline-flex items-center gap-2 text-amber-400 font-semibold text-sm">
-                <span>Ingresar como comercio</span>
+                <span>
+                  {employerSession.user
+                    ? `Entrar como comercio (${employerSession.user.email})`
+                    : 'Ingresar como comercio'}
+                </span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             </Link>

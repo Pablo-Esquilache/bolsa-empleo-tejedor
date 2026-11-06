@@ -41,8 +41,8 @@ const ViewCvPage = lazy(() =>
 
 export const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <BrowserRouter>
+    <BrowserRouter>
+      <AuthProvider>
         <Suspense
           fallback={
             <div className="min-h-screen flex items-center justify-center text-sm text-slate-500">
@@ -70,8 +70,8 @@ export const App: React.FC = () => {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
-      </BrowserRouter>
-    </AuthProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 };
 

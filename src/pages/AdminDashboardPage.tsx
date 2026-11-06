@@ -107,8 +107,10 @@ export const AdminDashboardPage: React.FC = () => {
 
   const isAdmin = Boolean(token && user && user.role === 'admin');
 
-  const fetchAdminData = async (currentToken: string) => {
-    setLoadingData(true);
+  const fetchAdminData = async (currentToken: string, silent = false) => {
+    if (!silent) {
+      setLoadingData(true);
+    }
     try {
       const { data: indData } = await supabase
         .from('industries')
@@ -127,15 +129,45 @@ export const AdminDashboardPage: React.FC = () => {
         setTickets(data.tickets || []);
       }
     } finally {
-      setLoadingData(false);
+      if (!silent) {
+        setLoadingData(false);
+      }
     }
   };
 
   useEffect(() => {
     if (isAdmin && token) {
-      fetchAdminData(token);
+      fetchAdminData(token, false);
     }
   }, [isAdmin, token]);
+
+  // Actualizar automáticamente sin necesidad de apretar F5 al cambiar de pestaña, volver a la ventana o cada 12s
+  useEffect(() => {
+    if (!isAdmin || !token) return;
+
+    fetchAdminData(token, true);
+
+    const handleRefresh = () => {
+      if (document.visibilityState === 'visible') {
+        fetchAdminData(token, true);
+      }
+    };
+
+    window.addEventListener('focus', handleRefresh);
+    document.addEventListener('visibilitychange', handleRefresh);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchAdminData(token, true);
+      }
+    }, 12_000);
+
+    return () => {
+      window.removeEventListener('focus', handleRefresh);
+      document.removeEventListener('visibilitychange', handleRefresh);
+      clearInterval(interval);
+    };
+  }, [isAdmin, token, activeTab]);
 
   const resetFilters = () => {
     setSearchQuery('');
