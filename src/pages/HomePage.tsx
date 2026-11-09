@@ -14,9 +14,19 @@ export const HomePage: React.FC = () => {
 
   return (
     <div className="space-y-12 pb-12">
-      {/* Hero Principal sin cartelito de ubicación arriba */}
+      {/* Hero Principal con isotipo oficial */}
       <section className="bg-gradient-to-b from-brand-900 via-brand-800 to-brand-700 text-white py-14 sm:py-20 px-4">
         <div className="max-w-4xl mx-auto text-center space-y-6">
+          <div className="flex justify-center">
+            <img
+              src="/apple-touch-icon.png"
+              alt="Bolsa de Empleo Tejedor"
+              width={88}
+              height={88}
+              className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl shadow-2xl ring-4 ring-white/20 object-cover"
+            />
+          </div>
+
           <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
             {APP_NAME}
           </h1>

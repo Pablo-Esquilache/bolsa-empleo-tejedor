@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { ShieldCheck, ArrowLeft, LogOut } from 'lucide-react';
+import { ArrowLeft, LogOut } from 'lucide-react';
 import { APP_NAME } from '../../lib/constants';
 import { useAuth } from '../../context/AuthContext';
 
@@ -18,9 +18,12 @@ export const AdminLayout: React.FC = () => {
       <header className="bg-slate-900 text-white border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
+            <img
+              src="/favicon-64.png"
+              alt="Logo"
+              className="w-9 h-9 rounded-xl shadow-sm object-cover shrink-0 ring-1 ring-white/10"
+            />
+            <div className="h-7 w-px bg-slate-700 hidden sm:block" />
             <div>
               <h1 className="font-bold text-base sm:text-lg leading-tight">
                 Panel de Administración — {APP_NAME}
@@ -54,7 +57,7 @@ export const AdminLayout: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8">
         <Outlet />
       </main>
     </div>
