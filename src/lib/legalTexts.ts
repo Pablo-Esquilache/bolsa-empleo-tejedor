@@ -141,7 +141,7 @@ export const PRIVACY: LegalSection[] = [
   {
     title: '7. Conservación',
     paragraphs: [
-      'Guardamos tus datos mientras tu cuenta esté activa. Las cuentas sin actividad durante 24 meses y los avisos vencidos se eliminan automáticamente; los registros de seguridad se conservan hasta 12 meses. Conservamos la constancia de aceptación de estos textos sin tus datos personales (solo un identificador no reversible).',
+      'Guardamos tus datos mientras tu cuenta esté activa. Las cuentas sin actividad durante 12 meses y los avisos vencidos se eliminan automáticamente; los registros de seguridad se conservan hasta 12 meses. Conservamos la constancia de aceptación de estos textos sin tus datos personales (solo un identificador no reversible).',
     ],
   },
   {

@@ -431,6 +431,9 @@ export const CandidateProfilePage: React.FC = () => {
               placeholder="Contá brevemente tu experiencia, dónde trabajaste antes o qué sabés hacer..."
               className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-brand-600 focus:outline-none"
             />
+            <p className="text-[11px] text-slate-500 mt-1">
+              Por tu privacidad, no incluyas teléfonos ni correos electrónicos acá (tu teléfono de contacto ya queda guardado en la sección privada de arriba).
+            </p>
           </div>
         </div>
 

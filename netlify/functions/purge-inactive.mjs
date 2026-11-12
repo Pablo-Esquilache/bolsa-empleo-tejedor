@@ -1,6 +1,19 @@
 const DEFAULT_SUPABASE_URL = 'https://rgqnwlwcbwofreqignjd.supabase.co';
 
-export const handler = async () => {
+export const handler = async (event) => {
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const headerSecret =
+      event?.headers?.['x-cron-secret'] ||
+      event?.headers?.['authorization']?.replace(/^Bearer\s+/i, '');
+    if (headerSecret !== cronSecret) {
+      return {
+        statusCode: 401,
+        body: JSON.stringify({ error: 'Unauthorized: invalid or missing CRON_SECRET' }),
+      };
+    }
+  }
+
   const supabaseUrl = process.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -20,7 +33,7 @@ export const handler = async () => {
         apikey: serviceRoleKey,
         Authorization: `Bearer ${serviceRoleKey}`,
       },
-      body: '{}',
+      body: JSON.stringify({ p_months: 12 }),
     });
 
     const data = await res.json().catch(() => ({}));

@@ -246,6 +246,24 @@ function formatUserDataAsText(d: any): string {
     });
   }
 
+  // 9. Historial de consultas y accesos a mis datos (Ley 25.326 Art. 14)
+  if (Array.isArray(d.access_history) && d.access_history.length > 0) {
+    sep('9. HISTORIAL DE CONSULTAS Y ACCESOS A MIS DATOS');
+    d.access_history.forEach((h: any, idx: number) => {
+      add(
+        `[Acceso ${idx + 1}] Acción: ${
+          h.action === 'view_cv'
+            ? 'Visualización de CV en PDF'
+            : h.action === 'request_contact'
+            ? 'Solicitud de contacto por WhatsApp'
+            : h.action
+        } · Comercio: ${h.actor_employer || 'Comercio registrado'} · Fecha: ${
+          h.created_at ? new Date(h.created_at).toLocaleString('es-AR') : '-'
+        }`
+      );
+    });
+  }
+
   add('');
   add('======================================================================');
   add('FIN DEL REPORTE — Bolsa de Empleo Tejedor');
