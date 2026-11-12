@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Users,
   Search,
@@ -10,6 +10,7 @@ import {
   UserCheck,
   RotateCcw,
   SlidersHorizontal,
+  ArrowRight,
 } from 'lucide-react';
 import {
   AVAILABILITY_OPTIONS,
@@ -50,16 +51,13 @@ export const CandidatesDirectoryPage: React.FC = () => {
   const [requestingContact, setRequestingContact] = useState(false);
 
   useEffect(() => {
-    if (!user || !token) {
-      navigate('/');
-      return;
-    }
-    if (user.role === 'candidate') {
+    // Si es postulante logueado, redirigir a vacantes
+    if (user?.role === 'candidate') {
       navigate('/vacantes');
       return;
     }
 
-    supabase.rpc('get_candidates_directory_data', { p_token: token }).then(({ data }) => {
+    supabase.rpc('get_candidates_directory_data', { p_token: token || null }).then(({ data }) => {
       if (data?.industries && data.industries.length > 0) {
         setIndustriesCatalog(data.industries as IndustryItem[]);
       }
@@ -154,9 +152,27 @@ export const CandidatesDirectoryPage: React.FC = () => {
           Directorio de Postulantes ({filteredCandidates.length})
         </h1>
         <p className="text-sm text-slate-600 mt-1">
-          Filtrá a la izquierda y hacé clic en cualquier postulante a la derecha para ver su perfil, CV o contactarlo por WhatsApp.
+          Filtrá a la izquierda y hacé clic en cualquier postulante a la derecha para ver su perfil, oficios y disponibilidad.
         </p>
       </div>
+
+      {(!user || user.role !== 'employer') && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
+          <div>
+            <p className="font-bold text-amber-950">Directorio de Oficios y Postulantes (Vista Protegida)</p>
+            <p className="text-amber-800 text-xs mt-0.5">
+              Por privacidad y protección de datos (Ley 25.326), los apellidos completos, teléfonos directos y CVs en PDF son exclusivos para comercios registrados.
+            </p>
+          </div>
+          <Link
+            to="/ingresar?rol=employer"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 shadow-sm"
+          >
+            <span>Ingresar como Comercio</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Diseño 20%-25% Filtros a la izquierda / 75%-80% Tarjetas una debajo de la otra a la derecha */}
       <div className="flex flex-col lg:flex-row items-start gap-6">
@@ -453,50 +469,68 @@ export const CandidatesDirectoryPage: React.FC = () => {
                 </p>
               )}
 
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  {selectedCandidate.cv_path && (
+              {!user || user.role !== 'employer' ? (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">¿Querés ver el CV o contactar a este postulante?</p>
+                    <p className="text-[11px] text-slate-600">
+                      Ingresá o registrate con tu comercio para habilitar el teléfono directo y descargar su CV.
+                    </p>
+                  </div>
+                  <Link
+                    to="/ingresar?rol=employer"
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shrink-0 shadow-sm"
+                  >
+                    <span>Ingresar como Comercio</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    {selectedCandidate.cv_path && (
+                      <a
+                        href={selectedCandidate.cv_path}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs sm:text-sm font-semibold"
+                      >
+                        <FileText className="w-4 h-4 text-brand-700" />
+                        <span>Ver CV en PDF</span>
+                      </a>
+                    )}
+                    <ReportAction
+                      targetType="candidate"
+                      targetId={selectedCandidate.id}
+                      targetLabel={`${selectedCandidate.first_name} ${selectedCandidate.last_name}`}
+                    />
+                  </div>
+
+                  {contactPhone ? (
                     <a
-                      href={selectedCandidate.cv_path}
+                      href={buildWhatsAppUrl(contactPhone)}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs sm:text-sm font-semibold"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm"
                     >
-                      <FileText className="w-4 h-4 text-brand-700" />
-                      <span>Ver CV en PDF</span>
+                      <MessageCircle className="w-4 h-4" />
+                      <span>Abrir WhatsApp ({contactPhone})</span>
                     </a>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={requestingContact}
+                      onClick={() => handleContactCandidate(selectedCandidate)}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      <span>
+                        {requestingContact ? 'Habilitando...' : 'Contactar por WhatsApp'}
+                      </span>
+                    </button>
                   )}
-                  <ReportAction
-                    targetType="candidate"
-                    targetId={selectedCandidate.id}
-                    targetLabel={`${selectedCandidate.first_name} ${selectedCandidate.last_name}`}
-                  />
                 </div>
-
-                {contactPhone ? (
-                  <a
-                    href={buildWhatsAppUrl(contactPhone)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    <span>Abrir WhatsApp ({contactPhone})</span>
-                  </a>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={requestingContact}
-                    onClick={() => handleContactCandidate(selectedCandidate)}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    <span>
-                      {requestingContact ? 'Habilitando...' : 'Contactar por WhatsApp'}
-                    </span>
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           </div>
         </div>

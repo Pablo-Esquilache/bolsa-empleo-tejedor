@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   MapPin,
   Briefcase,
@@ -12,6 +12,7 @@ import {
   Trash2,
   RotateCcw,
   SlidersHorizontal,
+  ArrowRight,
 } from 'lucide-react';
 import {
   AVAILABILITY_OPTIONS,
@@ -42,7 +43,6 @@ function getCandidateApplicationBadge(status: string): { label: string; classNam
 
 export const JobsDirectoryPage: React.FC = () => {
   const { token, user } = useAuth();
-  const navigate = useNavigate();
 
   const [activeView, setActiveView] = useState<'jobs' | 'employers' | 'my_applications'>('jobs');
   const [industriesCatalog, setIndustriesCatalog] = useState<IndustryItem[]>(INITIAL_INDUSTRIES);
@@ -76,15 +76,14 @@ export const JobsDirectoryPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!user || !token) {
-      navigate('/');
-      return;
+    const fetchPromises: Promise<any>[] = [
+      Promise.resolve(supabase.rpc('get_jobs_directory_data', { p_token: token || null })),
+    ];
+    if (token) {
+      fetchPromises.push(loadMyApplications(token));
     }
 
-    Promise.all([
-      supabase.rpc('get_jobs_directory_data', { p_token: token }),
-      loadMyApplications(token),
-    ]).then(([dirRes]) => {
+    Promise.all(fetchPromises).then(([dirRes]) => {
       const payload = dirRes.data;
       if (payload?.industries && payload.industries.length > 0) {
         setIndustriesCatalog(payload.industries as IndustryItem[]);
@@ -97,7 +96,7 @@ export const JobsDirectoryPage: React.FC = () => {
       }
       setLoading(false);
     });
-  }, [user, token, navigate]);
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -260,20 +259,40 @@ export const JobsDirectoryPage: React.FC = () => {
             <span>Comercios Registrados ({filteredEmployers.length})</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveView('my_applications')}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
-              activeView === 'my_applications'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-white text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Mis Postulaciones ({myApplications.length})</span>
-          </button>
+          {user && (
+            <button
+              type="button"
+              onClick={() => setActiveView('my_applications')}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                activeView === 'my_applications'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-white text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Mis Postulaciones ({myApplications.length})</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {!user && (
+        <div className="p-4 rounded-2xl bg-brand-50 border border-brand-200 text-brand-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
+          <div>
+            <p className="font-bold text-slate-900">Cartelera pública de búsquedas laborales</p>
+            <p className="text-brand-800 text-xs mt-0.5">
+              Podés explorar los avisos y requisitos libremente. Para postularte, ingresá con tu cuenta de Postulante.
+            </p>
+          </div>
+          <Link
+            to="/ingresar?rol=candidate"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shrink-0 shadow-sm"
+          >
+            <span>Ingresar como Postulante</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
 
       {activeView === 'my_applications' ? (
         /* Vista de Mis Postulaciones una debajo de la otra */

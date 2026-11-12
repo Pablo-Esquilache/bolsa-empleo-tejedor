@@ -96,16 +96,26 @@ export const MainLayout: React.FC = () => {
             ) : (
               <div className="flex items-center gap-2">
                 <Link
-                  to="/ingresar?rol=candidate"
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-brand-700 hover:bg-slate-100 transition-colors"
+                  to="/vacantes"
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-colors ${
+                    location.pathname.startsWith('/vacantes')
+                      ? 'bg-brand-50 text-brand-700'
+                      : 'text-slate-700 hover:text-brand-700 hover:bg-slate-100'
+                  }`}
                 >
-                  Soy Postulante
+                  <Briefcase className="w-4 h-4 text-brand-600" />
+                  <span>Ver Búsquedas</span>
                 </Link>
                 <Link
-                  to="/ingresar?rol=employer"
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition-colors"
+                  to="/postulantes"
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-colors ${
+                    location.pathname.startsWith('/postulantes')
+                      ? 'bg-slate-800 text-white'
+                      : 'bg-slate-900 hover:bg-slate-800 text-white'
+                  }`}
                 >
-                  Soy Comercio
+                  <Users className="w-4 h-4" />
+                  <span>Ver Postulantes</span>
                 </Link>
               </div>
             )}
@@ -190,22 +200,45 @@ export const MainLayout: React.FC = () => {
             ) : (
               <div className="space-y-2">
                 <Link
-                  to="/ingresar?rol=candidate"
+                  to="/vacantes"
                   onClick={closeMenu}
                   className="flex items-center justify-between p-3 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 text-sm font-semibold"
                 >
-                  <span>Ingresar como Postulante</span>
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="w-4 h-4 text-brand-700" />
+                    <span>Ver Búsquedas Laborales</span>
+                  </div>
                   <ArrowRight className="w-4 h-4" />
                 </Link>
 
                 <Link
-                  to="/ingresar?rol=employer"
+                  to="/postulantes"
                   onClick={closeMenu}
                   className="flex items-center justify-between p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold"
                 >
-                  <span>Ingresar como Comercio</span>
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    <span>Ver Postulantes</span>
+                  </div>
                   <ArrowRight className="w-4 h-4" />
                 </Link>
+
+                <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-2 text-center">
+                  <Link
+                    to="/ingresar?rol=candidate"
+                    onClick={closeMenu}
+                    className="p-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Ingresar Postulante
+                  </Link>
+                  <Link
+                    to="/ingresar?rol=employer"
+                    onClick={closeMenu}
+                    className="p-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Ingresar Comercio
+                  </Link>
+                </div>
 
                 <Link
                   to="/admin"
