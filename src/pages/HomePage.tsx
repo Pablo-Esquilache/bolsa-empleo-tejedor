@@ -1,19 +1,30 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { UserPlus, Building2, Search, Shield, CheckCircle2, ArrowRight } from 'lucide-react';
 import { APP_NAME, INITIAL_INDUSTRIES } from '../lib/constants';
 import { useAuth } from '../context/AuthContext';
 
 export const HomePage: React.FC = () => {
+  const location = useLocation();
   const { getSessionByRole } = useAuth();
   const candidateSession = getSessionByRole('candidate');
   const employerSession = getSessionByRole('employer');
+  const accountDeletedNotice = (location.state as { accountDeletedNotice?: string } | null)
+    ?.accountDeletedNotice;
 
   const candidateTarget = candidateSession.token ? '/vacantes' : '/ingresar?rol=candidate';
   const employerTarget = employerSession.token ? '/postulantes' : '/ingresar?rol=employer';
 
   return (
     <div className="space-y-12 pb-12">
+      {accountDeletedNotice && (
+        <div className="max-w-4xl mx-auto px-4 pt-6 -mb-6">
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm font-medium flex items-center gap-2.5 shadow-sm">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>{accountDeletedNotice}</span>
+          </div>
+        </div>
+      )}
       {/* Hero Principal con isotipo oficial */}
       <section className="bg-gradient-to-b from-brand-900 via-brand-800 to-brand-700 text-white py-14 sm:py-20 px-4">
         <div className="max-w-4xl mx-auto text-center space-y-6">

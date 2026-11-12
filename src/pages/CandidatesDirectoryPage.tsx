@@ -23,6 +23,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { IndustryItem } from '../types/database';
 import { buildWhatsAppUrl, normalizeSearchText } from '../lib/emailService';
+import { ReportAction } from '../components/ui/ReportModal';
 
 export const CandidatesDirectoryPage: React.FC = () => {
   const { token, user } = useAuth();
@@ -445,42 +446,57 @@ export const CandidatesDirectoryPage: React.FC = () => {
               )}
             </div>
 
-            <div className="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
-              {selectedCandidate.cv_path && (
-                <a
-                  href={selectedCandidate.cv_path}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs sm:text-sm font-semibold"
-                >
-                  <FileText className="w-4 h-4 text-brand-700" />
-                  <span>Ver CV en PDF</span>
-                </a>
+            <div className="pt-3 border-t border-slate-200 space-y-3">
+              {contactPhone && (
+                <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                  Usá estos datos solo para contactarlo por una búsqueda laboral.
+                </p>
               )}
 
-              {contactPhone ? (
-                <a
-                  href={buildWhatsAppUrl(contactPhone)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  <span>Abrir WhatsApp ({contactPhone})</span>
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  disabled={requestingContact}
-                  onClick={() => handleContactCandidate(selectedCandidate)}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  <span>
-                    {requestingContact ? 'Habilitando...' : 'Contactar por WhatsApp'}
-                  </span>
-                </button>
-              )}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {selectedCandidate.cv_path && (
+                    <a
+                      href={selectedCandidate.cv_path}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs sm:text-sm font-semibold"
+                    >
+                      <FileText className="w-4 h-4 text-brand-700" />
+                      <span>Ver CV en PDF</span>
+                    </a>
+                  )}
+                  <ReportAction
+                    targetType="candidate"
+                    targetId={selectedCandidate.id}
+                    targetLabel={`${selectedCandidate.first_name} ${selectedCandidate.last_name}`}
+                  />
+                </div>
+
+                {contactPhone ? (
+                  <a
+                    href={buildWhatsAppUrl(contactPhone)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Abrir WhatsApp ({contactPhone})</span>
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={requestingContact}
+                    onClick={() => handleContactCandidate(selectedCandidate)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>
+                      {requestingContact ? 'Habilitando...' : 'Contactar por WhatsApp'}
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

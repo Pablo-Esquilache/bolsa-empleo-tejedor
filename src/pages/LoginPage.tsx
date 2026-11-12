@@ -16,11 +16,14 @@ import { supabase } from '../lib/supabase';
 import { requestServerOtp } from '../lib/emailService';
 import { useAuth } from '../context/AuthContext';
 import { TurnstileWidget } from '../components/ui/TurnstileWidget';
+import { useLegalModal } from '../components/ui/LegalModal';
+import { LEGAL_VERSION } from '../lib/legalTexts';
 
 export const LoginPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { setSession, getSessionByRole } = useAuth();
+  const { openLegalModal } = useLegalModal();
 
   const roleParam = searchParams.get('rol') as UserRole | null;
   const hasExplicitRole = roleParam === 'employer' || roleParam === 'candidate';
@@ -43,6 +46,7 @@ export const LoginPage: React.FC = () => {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [turnstileReset, setTurnstileReset] = useState(0);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const isEmployer = selectedRole === 'employer';
 
@@ -64,6 +68,10 @@ export const LoginPage: React.FC = () => {
     if (e) e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) return;
+    if (!acceptedTerms) {
+      setErrorMsg('Debés aceptar los Términos y Condiciones y la Política de Privacidad antes de solicitar el código.');
+      return;
+    }
     if (!turnstileToken) {
       setErrorMsg('Completá la verificación anti-bots antes de solicitar el código.');
       return;
@@ -72,7 +80,12 @@ export const LoginPage: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      const result = await requestServerOtp(cleanEmail, selectedRole, turnstileToken);
+      const result = await requestServerOtp(
+        cleanEmail,
+        selectedRole,
+        turnstileToken,
+        LEGAL_VERSION
+      );
       if (!result.ok) {
         throw new Error(result.error || 'No se pudo enviar el código de acceso.');
       }
@@ -145,7 +158,11 @@ export const LoginPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-100">
             <button
               type="button"
-              onClick={() => setSearchParams({ rol: 'candidate' })}
+              onClick={() => {
+                setSearchParams({ rol: 'candidate' });
+                setAcceptedTerms(false);
+                setErrorMsg(null);
+              }}
               className={`py-2 px-3 rounded-lg text-xs font-bold transition-colors ${
                 !isEmployer
                   ? 'bg-white text-brand-700 shadow-sm'
@@ -156,7 +173,11 @@ export const LoginPage: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => setSearchParams({ rol: 'employer' })}
+              onClick={() => {
+                setSearchParams({ rol: 'employer' });
+                setAcceptedTerms(false);
+                setErrorMsg(null);
+              }}
               className={`py-2 px-3 rounded-lg text-xs font-bold transition-colors ${
                 isEmployer
                   ? 'bg-white text-slate-900 shadow-sm'
@@ -224,9 +245,50 @@ export const LoginPage: React.FC = () => {
               </p>
             </div>
 
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 leading-relaxed">
+              <div className="flex items-start gap-2.5">
+                <input
+                  id="accept-legal-checkbox"
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600 shrink-0 cursor-pointer"
+                />
+                <label htmlFor="accept-legal-checkbox" className="cursor-pointer select-none">
+                  Soy mayor de 18 años y acepto los{' '}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openLegalModal({ tab: 'terms', role: selectedRole });
+                    }}
+                    className="text-brand-700 font-semibold underline hover:text-brand-800 focus:outline-none focus:ring-2 focus:ring-brand-600 rounded"
+                  >
+                    Términos y Condiciones
+                  </button>{' '}
+                  y la{' '}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openLegalModal({ tab: 'privacy', role: selectedRole });
+                    }}
+                    className="text-brand-700 font-semibold underline hover:text-brand-800 focus:outline-none focus:ring-2 focus:ring-brand-600 rounded"
+                  >
+                    Política de Privacidad
+                  </button>
+                  {isEmployer
+                    ? ', y que soy responsable de los datos que obtenga de los postulantes.'
+                    : ', incluido que mi perfil, CV y teléfono se muestren a comercios registrados.'}
+                </label>
+              </div>
+            </div>
+
             <button
               type="submit"
-              disabled={loading || !turnstileToken}
+              disabled={loading || !turnstileToken || !acceptedTerms}
               className={`w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-sm shadow-sm transition-colors ${
                 isEmployer
                   ? 'bg-slate-900 hover:bg-slate-800 text-white'
@@ -293,7 +355,7 @@ export const LoginPage: React.FC = () => {
 
               <button
                 type="button"
-                disabled={loading || resendCooldown > 0 || !turnstileToken}
+                disabled={loading || resendCooldown > 0 || !turnstileToken || !acceptedTerms}
                 onClick={() => handleSendOtp()}
                 className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline font-semibold disabled:opacity-50"
               >

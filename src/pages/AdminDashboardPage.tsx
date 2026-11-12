@@ -21,6 +21,7 @@ import {
   Send,
   CheckCircle2,
   SlidersHorizontal,
+  Flag,
 } from 'lucide-react';
 import {
   AVAILABILITY_OPTIONS,
@@ -70,12 +71,14 @@ export const AdminDashboardPage: React.FC = () => {
 
   // Datos del tablero
   const [activeTab, setActiveTab] = useState<
-    'candidates' | 'employers' | 'jobs' | 'industries' | 'tickets'
+    'candidates' | 'employers' | 'jobs' | 'industries' | 'tickets' | 'reports'
   >('candidates');
   const [candidates, setCandidates] = useState<any[]>([]);
   const [employers, setEmployers] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
+  const [resolvingReportId, setResolvingReportId] = useState<string | null>(null);
   const [ticketsPage, setTicketsPage] = useState(1);
   const [replyByTicket, setReplyByTicket] = useState<Record<string, string>>({});
   const [replyingTicketId, setReplyingTicketId] = useState<string | null>(null);
@@ -128,6 +131,7 @@ export const AdminDashboardPage: React.FC = () => {
         setEmployers(data.employers || []);
         setJobs(data.jobs || []);
         setTickets(data.tickets || []);
+        setReports(data.reports || []);
       }
     } finally {
       if (!silent) {
@@ -257,6 +261,50 @@ export const AdminDashboardPage: React.FC = () => {
 
     setDetailModal(null);
     await fetchAdminData(token);
+  };
+
+  const handleResolveReport = async (reportId: string, status: 'resolved' | 'dismissed') => {
+    if (!token) return;
+    setResolvingReportId(reportId);
+    try {
+      const { error } = await supabase.rpc('admin_resolve_report', {
+        p_token: token,
+        p_report_id: reportId,
+        p_status: status,
+      });
+      if (error) {
+        alert(error.message);
+        return;
+      }
+      await fetchAdminData(token);
+    } finally {
+      setResolvingReportId(null);
+    }
+  };
+
+  const handleOpenReportedTarget = (rp: any) => {
+    if (rp.target_type === 'candidate') {
+      const cand = candidates.find((c) => c.id === rp.target_id);
+      if (cand) {
+        setDetailModal({ type: 'candidate', item: cand });
+      } else {
+        alert('El perfil del postulante denunciado ya no está disponible.');
+      }
+    } else if (rp.target_type === 'employer') {
+      const emp = employers.find((e) => e.id === rp.target_id);
+      if (emp) {
+        setDetailModal({ type: 'employer', item: emp });
+      } else {
+        alert('El perfil del comercio denunciado ya no está disponible.');
+      }
+    } else if (rp.target_type === 'job_post') {
+      const job = jobs.find((j) => j.id === rp.target_id);
+      if (job) {
+        setDetailModal({ type: 'job', item: job });
+      } else {
+        alert('El aviso denunciado ya fue eliminado o no está disponible.');
+      }
+    }
   };
 
   const handleReplyTicket = async (
@@ -553,6 +601,7 @@ export const AdminDashboardPage: React.FC = () => {
     jobs.filter((j) => j.status === 'paused').length;
 
   const pendingTicketsCount = tickets.filter((tk) => tk.status === 'pending').length;
+  const openReportsCount = reports.filter((rp) => rp.status === 'open').length;
   const TICKETS_PER_PAGE = 5;
   const totalTicketPages = Math.max(1, Math.ceil(tickets.length / TICKETS_PER_PAGE));
   const safeTicketsPage = Math.min(ticketsPage, totalTicketPages);
@@ -687,9 +736,134 @@ export const AdminDashboardPage: React.FC = () => {
             </span>
           )}
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('reports')}
+          className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+            activeTab === 'reports'
+              ? 'bg-rose-600 text-white'
+              : 'bg-white text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Flag className="w-4 h-4" />
+          <span>Denuncias ({reports.length})</span>
+          {openReportsCount > 0 && (
+            <span className="ml-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-400 text-slate-950">
+              {openReportsCount}
+            </span>
+          )}
+        </button>
       </div>
 
-      {activeTab === 'tickets' ? (
+      {activeTab === 'reports' ? (
+        <div className="space-y-4">
+          {reports.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
+              No hay denuncias registradas por el momento.
+            </div>
+          ) : (
+            reports.map((rp) => (
+              <div
+                key={rp.id}
+                className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        rp.status === 'open'
+                          ? 'bg-rose-100 text-rose-800'
+                          : rp.status === 'resolved'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {rp.status === 'open'
+                        ? 'Abierta'
+                        : rp.status === 'resolved'
+                          ? 'Resuelta'
+                          : 'Descartada'}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                      {rp.target_type === 'job_post'
+                        ? 'Aviso laboral'
+                        : rp.target_type === 'employer'
+                          ? 'Comercio'
+                          : 'Postulante'}
+                    </span>
+                    <span className="text-xs font-bold text-slate-900">{rp.reason}</span>
+                    <span className="text-xs text-slate-500">
+                      · {new Date(rp.created_at).toLocaleString('es-AR')}
+                    </span>
+                  </div>
+
+                  <p className="text-sm font-bold text-slate-900">{rp.target_label}</p>
+
+                  {rp.detail && (
+                    <p className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                      {rp.detail}
+                    </p>
+                  )}
+
+                  <p className="text-[11px] text-slate-500">
+                    Denunciante: {rp.reporter_email} · Estado actual del objetivo:{' '}
+                    <span className="font-semibold text-slate-700">{rp.target_status}</span>
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenReportedTarget(rp)}
+                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold"
+                  >
+                    Abrir ficha
+                  </button>
+
+                  {rp.target_status === 'active' && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleModerate(
+                          rp.target_type === 'job_post' ? 'job' : 'profile',
+                          rp.target_id,
+                          'pause'
+                        )
+                      }
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-semibold"
+                    >
+                      <PauseCircle className="w-3.5 h-3.5" />
+                      <span>Pausar</span>
+                    </button>
+                  )}
+
+                  {rp.status === 'open' && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={resolvingReportId === rp.id}
+                        onClick={() => handleResolveReport(rp.id, 'resolved')}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold"
+                      >
+                        Resolver
+                      </button>
+                      <button
+                        type="button"
+                        disabled={resolvingReportId === rp.id}
+                        onClick={() => handleResolveReport(rp.id, 'dismissed')}
+                        className="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-slate-700 text-xs font-semibold"
+                      >
+                        Descartar
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : activeTab === 'tickets' ? (
         /* Pestaña de Consultas y Pedidos enviados por los Comercios */
         <div className="space-y-4">
           {tickets.length === 0 ? (

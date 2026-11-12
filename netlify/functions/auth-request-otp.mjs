@@ -34,11 +34,22 @@ export const handler = async (event) => {
       ? body.role
       : 'candidate';
     const turnstileToken = String(body.turnstileToken || '').trim();
+    const termsVersion = String(body.termsVersion || '').trim();
 
     if (!cleanEmail || !cleanEmail.includes('@') || cleanEmail.length > 160) {
       return {
         statusCode: 400,
         body: JSON.stringify({ error: 'Ingresá un correo electrónico válido.' }),
+      };
+    }
+
+    if (role !== 'admin' && !termsVersion) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          error:
+            'Tenés que aceptar los Términos y la Política de Privacidad vigentes. Si ya los aceptaste, recargá la página.',
+        }),
       };
     }
 
@@ -94,15 +105,16 @@ export const handler = async (event) => {
         p_email: cleanEmail,
         p_role: role,
         p_client_ip: clientIp,
+        p_terms_version: role === 'admin' ? null : termsVersion || null,
       }),
     });
 
     const rpcData = await rpcResponse.json().catch(() => ({}));
 
-    if (!rpcResponse.ok) {
+    if (!rpcResponse.ok || rpcData?.ok === false) {
       const msg =
-        rpcData?.message ||
         rpcData?.error ||
+        rpcData?.message ||
         'No se pudo generar el código de acceso.';
       return {
         statusCode: 400,

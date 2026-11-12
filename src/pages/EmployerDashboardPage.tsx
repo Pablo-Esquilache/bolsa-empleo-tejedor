@@ -30,6 +30,7 @@ import { LocationSelector, LocationValue } from '../components/ui/LocationSelect
 import { compressImageToDataUrl } from '../lib/imageCompression';
 import { buildWhatsAppUrl, notifyServerEvent } from '../lib/emailService';
 import { IndustryItem } from '../types/database';
+import { PrivacyAndAccountSection } from '../components/ui/PrivacyAndAccountSection';
 
 type AppTrackingStatus = 'received' | 'in_review' | 'shortlisted' | 'hired' | 'rejected';
 
@@ -803,6 +804,12 @@ export const EmployerDashboardPage: React.FC = () => {
                                 </div>
                               </div>
 
+                              {app.phone && (
+                                <p className="text-[11px] text-slate-500">
+                                  Usá estos datos solo para contactarlo por una búsqueda laboral.
+                                </p>
+                              )}
+
                               {/* Botonera de los 5 estados de seguimiento */}
                               <div className="pt-2 border-t border-slate-200/80 flex flex-wrap items-center gap-1.5">
                                 <span className="text-[11px] font-bold uppercase text-slate-500 mr-1">
@@ -1054,6 +1061,8 @@ export const EmployerDashboardPage: React.FC = () => {
           </button>
         </form>
       )}
+
+      {tab === 'profile' && <PrivacyAndAccountSection role="employer" />}
 
       {tab === 'admin_support' && (
         <div className="space-y-6">

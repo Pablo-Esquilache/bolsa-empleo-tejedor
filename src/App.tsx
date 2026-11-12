@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { MainLayout } from './components/layout/MainLayout';
 import { AdminLayout } from './components/layout/AdminLayout';
 import { AuthProvider } from './context/AuthContext';
+import { LegalModalProvider } from './components/ui/LegalModal';
 
 const HomePage = lazy(() =>
   import('./pages/HomePage').then((m) => ({ default: m.HomePage }))
@@ -42,35 +43,37 @@ const ViewCvPage = lazy(() =>
 export const App: React.FC = () => {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Suspense
-          fallback={
-            <div className="min-h-screen flex items-center justify-center text-sm text-slate-500">
-              Cargando Bolsa de Empleo Tejedor...
-            </div>
-          }
-        >
-          <Routes>
-            {/* Sitio Público y Paneles de Usuario */}
-            <Route element={<MainLayout />}>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/ingresar" element={<LoginPage />} />
-              <Route path="/vacantes" element={<JobsDirectoryPage />} />
-              <Route path="/postulantes" element={<CandidatesDirectoryPage />} />
-              <Route path="/mi-perfil" element={<CandidateProfilePage />} />
-              <Route path="/mi-comercio" element={<EmployerDashboardPage />} />
-              <Route path="/ver-cv/:candidateId" element={<ViewCvPage />} />
-            </Route>
+      <LegalModalProvider>
+        <AuthProvider>
+          <Suspense
+            fallback={
+              <div className="min-h-screen flex items-center justify-center text-sm text-slate-500">
+                Cargando Bolsa de Empleo Tejedor...
+              </div>
+            }
+          >
+            <Routes>
+              {/* Sitio Público y Paneles de Usuario */}
+              <Route element={<MainLayout />}>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/ingresar" element={<LoginPage />} />
+                <Route path="/vacantes" element={<JobsDirectoryPage />} />
+                <Route path="/postulantes" element={<CandidatesDirectoryPage />} />
+                <Route path="/mi-perfil" element={<CandidateProfilePage />} />
+                <Route path="/mi-comercio" element={<EmployerDashboardPage />} />
+                <Route path="/ver-cv/:candidateId" element={<ViewCvPage />} />
+              </Route>
 
-            {/* Panel del Administrador (/admin) */}
-            <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<AdminDashboardPage />} />
-            </Route>
+              {/* Panel del Administrador (/admin) */}
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<AdminDashboardPage />} />
+              </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </AuthProvider>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </AuthProvider>
+      </LegalModalProvider>
     </BrowserRouter>
   );
 };

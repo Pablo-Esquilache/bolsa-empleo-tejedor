@@ -1,7 +1,8 @@
 export async function requestServerOtp(
   email: string,
   role: 'candidate' | 'employer' | 'admin',
-  turnstileToken: string
+  turnstileToken: string,
+  termsVersion?: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await fetch('/api/auth-request-otp', {
@@ -11,6 +12,7 @@ export async function requestServerOtp(
         email: email.trim().toLowerCase(),
         role,
         turnstileToken: (turnstileToken || '').trim(),
+        termsVersion: termsVersion || undefined,
       }),
     });
 

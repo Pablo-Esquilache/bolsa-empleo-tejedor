@@ -23,6 +23,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { IndustryItem } from '../types/database';
 import { normalizeSearchText, notifyServerEvent } from '../lib/emailService';
+import { ReportAction } from '../components/ui/ReportModal';
 
 function getCandidateApplicationBadge(status: string): { label: string; className: string } {
   switch (status) {
@@ -595,42 +596,55 @@ export const JobsDirectoryPage: React.FC = () => {
               </div>
             )}
 
-            <div className="pt-2 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setSelectedJob(null)}
-                className="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Cerrar
-              </button>
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+              <strong>Cuidado con las estafas:</strong> Nunca pagues para conseguir un empleo ni compartas datos bancarios. Este sitio no verifica a los comercios.
+            </div>
 
-              {appliedJobIds.has(selectedJob.id) ? (
-                myApplications.find((a) => a.job_post_id === selectedJob.id)?.status === 'rejected' ? (
-                  <span className="px-4 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">
-                    Postulación evaluada (No seleccionado)
-                  </span>
+            <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
+              <ReportAction
+                targetType="job_post"
+                targetId={selectedJob.id}
+                ownerId={selectedJob.employer_id}
+                targetLabel={selectedJob.title}
+              />
+
+              <div className="flex items-center gap-3 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => setSelectedJob(null)}
+                  className="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cerrar
+                </button>
+
+                {appliedJobIds.has(selectedJob.id) ? (
+                  myApplications.find((a) => a.job_post_id === selectedJob.id)?.status === 'rejected' ? (
+                    <span className="px-4 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">
+                      Postulación evaluada (No seleccionado)
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={applying}
+                      onClick={() => handleCancelApplication(selectedJob.id)}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold shadow-sm"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Cancelar mi postulación</span>
+                    </button>
+                  )
                 ) : (
                   <button
                     type="button"
                     disabled={applying}
-                    onClick={() => handleCancelApplication(selectedJob.id)}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold shadow-sm"
+                    onClick={() => handleApply(selectedJob)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold shadow-sm"
                   >
-                    <Trash2 className="w-4 h-4" />
-                    <span>Cancelar mi postulación</span>
+                    <Send className="w-4 h-4" />
+                    <span>{applying ? 'Enviando...' : 'Postularme a esta búsqueda'}</span>
                   </button>
-                )
-              ) : (
-                <button
-                  type="button"
-                  disabled={applying}
-                  onClick={() => handleApply(selectedJob)}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold shadow-sm"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>{applying ? 'Enviando...' : 'Postularme a esta búsqueda'}</span>
-                </button>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -709,6 +723,21 @@ export const JobsDirectoryPage: React.FC = () => {
                     </div>
                   ))
               )}
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+              <ReportAction
+                targetType="employer"
+                targetId={selectedEmployer.id}
+                targetLabel={selectedEmployer.trade_name}
+              />
+              <button
+                type="button"
+                onClick={() => setSelectedEmployer(null)}
+                className="px-4 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>

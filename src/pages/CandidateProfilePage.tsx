@@ -14,10 +14,22 @@ import { LocationSelector, LocationValue } from '../components/ui/LocationSelect
 import { compressImageToDataUrl, fileToBase64 } from '../lib/imageCompression';
 import { validatePdfFile } from '../lib/pdfValidation';
 import { IndustryItem, WorkSituation } from '../types/database';
+import { useLegalModal } from '../components/ui/LegalModal';
+import { PrivacyAndAccountSection } from '../components/ui/PrivacyAndAccountSection';
 
 export const CandidateProfilePage: React.FC = () => {
   const { token, user } = useAuth();
+  const { openLegalModal } = useLegalModal();
   const navigate = useNavigate();
+
+  const today = new Date();
+  const maxAdultBirthDate = new Date(
+    today.getFullYear() - 18,
+    today.getMonth(),
+    today.getDate()
+  )
+    .toISOString()
+    .split('T')[0];
 
   const [industriesCatalog, setIndustriesCatalog] = useState<IndustryItem[]>(INITIAL_INDUSTRIES);
   const [firstName, setFirstName] = useState('');
@@ -147,10 +159,10 @@ export const CandidateProfilePage: React.FC = () => {
     e.preventDefault();
     if (!token) return;
 
-    if (!firstName.trim() || !lastName.trim() || !phone.trim() || !location.locality) {
+    if (!firstName.trim() || !lastName.trim() || !phone.trim() || !location.locality || !birthDate) {
       setMessage({
         type: 'err',
-        text: 'Completá nombre, apellido, teléfono de contacto y elegí tu localidad en los 3 desplegables.',
+        text: 'Completá nombre, apellido, fecha de nacimiento (mayor de 18 años), teléfono de contacto y elegí tu localidad en los 3 desplegables.',
       });
       return;
     }
@@ -311,10 +323,13 @@ export const CandidateProfilePage: React.FC = () => {
 
             <div>
               <label className="block text-sm font-semibold text-slate-800 mb-1">
-                Fecha de nacimiento (Privado)
+                Fecha de nacimiento * (Privado · Mayor de 18 años)
               </label>
               <input
                 type="date"
+                required
+                max={maxAdultBirthDate}
+                min="1920-01-01"
                 value={birthDate}
                 onChange={(e) => setBirthDate(e.target.value)}
                 className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-brand-600 focus:outline-none"
@@ -451,18 +466,18 @@ export const CandidateProfilePage: React.FC = () => {
           </p>
         </div>
 
-        <div className="bg-slate-100 rounded-2xl border border-slate-200 p-4 text-xs text-slate-700">
-          <label className="flex items-start gap-2.5 cursor-pointer">
-            <input
-              type="checkbox"
-              required
-              defaultChecked={true}
-              className="mt-0.5 w-4 h-4 rounded text-brand-600 focus:ring-brand-500"
-            />
-            <span>
-              <strong>Consentimiento de privacidad (Ley 25.326):</strong> Autorizo que mi perfil laboral, Currículum Vitae y teléfono de contacto por WhatsApp estén disponibles para comercios y empleadores registrados y activos en Bolsa de Empleo Tejedor mientras mi perfil se encuentre activo o me postule a sus búsquedas. Puedo pausar mi perfil en cualquier momento desde el interruptor superior.
-            </span>
-          </label>
+        <div className="bg-slate-100 rounded-2xl border border-slate-200 p-4 text-xs text-slate-700 leading-relaxed">
+          <p>
+            Al ingresar aceptaste nuestra{' '}
+            <button
+              type="button"
+              onClick={() => openLegalModal({ tab: 'privacy', role: 'candidate' })}
+              className="text-brand-700 font-semibold underline hover:text-brand-800 focus:outline-none focus:ring-2 focus:ring-brand-600 rounded"
+            >
+              Política de Privacidad
+            </button>
+            : tu perfil laboral, CV y teléfono pueden ser vistos por comercios registrados mientras tu perfil esté activo o tengas una postulación vigente. Podés pausar tu visibilidad en cualquier momento desde el interruptor superior.
+          </p>
         </div>
 
         <button
@@ -474,6 +489,8 @@ export const CandidateProfilePage: React.FC = () => {
           <span>{saving ? 'Guardando perfil...' : 'Guardar Perfil e Ir a Búsquedas Laborales'}</span>
         </button>
       </form>
+
+      <PrivacyAndAccountSection role="candidate" />
     </div>
   );
 };

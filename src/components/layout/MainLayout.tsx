@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Briefcase, Users, UserCircle, Building2, LogOut, Menu, X, Shield, ArrowRight } from 'lucide-react';
-import { APP_NAME } from '../../lib/constants';
 import { useAuth } from '../../context/AuthContext';
 import { BrandLogo } from '../ui/BrandLogo';
+import { useLegalModal } from '../ui/LegalModal';
+import { CONTACT_EMAIL, OWNER_NAME, SITE_NAME } from '../../lib/siteConfig';
+import { LEGAL_VERSION_DISPLAY } from '../../lib/legalTexts';
 
 export const MainLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { openLegalModal } = useLegalModal();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
@@ -222,13 +225,52 @@ export const MainLayout: React.FC = () => {
         <Outlet />
       </main>
 
-      <footer className="bg-white border-t border-slate-200 py-6 mt-12">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <div className="flex items-center gap-2">
-            <img src="/favicon.png" alt="Logo" className="w-5 h-5 rounded-md" />
-            <p>© {new Date().getFullYear()} {APP_NAME} — Conectando trabajo y comercios locales.</p>
+      <footer className="bg-white border-t border-slate-200 py-7 mt-12">
+        <div className="max-w-7xl mx-auto px-4 space-y-3 text-xs text-slate-600">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <img src="/favicon.png" alt="Logo" className="w-5 h-5 rounded-md shrink-0 mt-0.5 sm:mt-0" />
+              <div className="space-y-0.5">
+                <p className="font-semibold text-slate-800">
+                  © {new Date().getFullYear()} {SITE_NAME}
+                </p>
+                <p>
+                  Servicio comunitario gratuito de contacto entre personas y comercios de Carlos Tejedor. No interviene en la contratación.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 font-medium">
+              <button
+                type="button"
+                onClick={() => openLegalModal({ tab: 'terms', role: 'all' })}
+                className="text-brand-700 hover:underline focus:outline-none focus:ring-2 focus:ring-brand-600 rounded"
+              >
+                Términos y Condiciones
+              </button>
+              <span className="text-slate-300">·</span>
+              <button
+                type="button"
+                onClick={() => openLegalModal({ tab: 'privacy', role: 'all' })}
+                className="text-brand-700 hover:underline focus:outline-none focus:ring-2 focus:ring-brand-600 rounded"
+              >
+                Política de Privacidad
+              </button>
+            </div>
           </div>
-          <p>Acceso exclusivo con sesión verificada para postulantes y comercios registrados.</p>
+
+          <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-500">
+            <p>
+              Responsable: <span className="font-medium text-slate-700">{OWNER_NAME}</span> · Contacto:{' '}
+              <a
+                href={`mailto:${CONTACT_EMAIL}`}
+                className="text-brand-700 hover:underline font-medium"
+              >
+                {CONTACT_EMAIL}
+              </a>
+            </p>
+            <p>Versión de los textos: {LEGAL_VERSION_DISPLAY}</p>
+          </div>
         </div>
       </footer>
     </div>
