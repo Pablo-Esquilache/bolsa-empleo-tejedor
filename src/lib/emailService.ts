@@ -39,7 +39,8 @@ export async function notifyServerEvent(params: {
     | 'new_application'
     | 'application_status_changed'
     | 'admin_ticket_created'
-    | 'admin_ticket_replied';
+    | 'admin_ticket_replied'
+    | 'minor_guardian_notice';
   targetId: string;
 }): Promise<boolean> {
   try {

@@ -110,6 +110,13 @@ function formatUserDataAsText(d: any): string {
       add('DATOS PRIVADOS DE CONTACTO:');
       add(`- Teléfono celular / WhatsApp: ${d.candidate_private.phone || '-'}`);
       add(`- Fecha de nacimiento: ${d.candidate_private.birth_date || '-'}`);
+      if (d.candidate_private.guardian_name || d.candidate_private.guardian_phone) {
+        add(`- Adulto responsable (16-17 años): ${d.candidate_private.guardian_name || '-'}`);
+        add(`- Teléfono responsable: ${d.candidate_private.guardian_phone || '-'}`);
+        if (d.candidate_private.guardian_email) {
+          add(`- Email responsable: ${d.candidate_private.guardian_email}`);
+        }
+      }
     }
     if (d.cv_metadata) {
       add('');
@@ -157,6 +164,9 @@ function formatUserDataAsText(d: any): string {
       add(`- Razón Social: ${d.employer_profile.legal_name || '-'}`);
       add(`- CUIT: ${d.employer_profile.cuit || '-'}`);
       add(`- Rubro principal: ${d.employer_profile.industry || '-'}`);
+      if (d.employer_profile.activity_start_date) {
+        add(`- Fecha de inicio de actividades: ${d.employer_profile.activity_start_date}`);
+      }
       add(
         `- Localidad: ${d.employer_profile.locality || '-'}, ${
           d.employer_profile.district || '-'

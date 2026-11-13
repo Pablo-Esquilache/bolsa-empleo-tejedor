@@ -255,7 +255,9 @@ export const LoginPage: React.FC = () => {
                   className="mt-0.5 w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600 shrink-0 cursor-pointer"
                 />
                 <label htmlFor="accept-legal-checkbox" className="cursor-pointer select-none">
-                  Soy mayor de 18 años y acepto los{' '}
+                  {selectedRole === 'employer'
+                    ? 'Soy mayor de 18 años y acepto los '
+                    : 'Tengo 18 años o más (o entre 16 y 17 años con autorización de madre, padre o tutor) y acepto los '}
                   <button
                     type="button"
                     onClick={(e) => {

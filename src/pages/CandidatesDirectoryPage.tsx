@@ -303,6 +303,16 @@ export const CandidatesDirectoryPage: React.FC = () => {
                       <h3 className="font-bold text-slate-900 text-base sm:text-lg">
                         {cand.first_name} {cand.last_name}
                       </h3>
+                      {typeof cand.age === 'number' && (
+                        <span className="text-xs font-semibold text-slate-500">
+                          ({cand.age} años)
+                        </span>
+                      )}
+                      {cand.is_minor && (
+                        <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200">
+                          Menor autorizado · Ley 26.390
+                        </span>
+                      )}
                       <span
                         className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
                           cand.work_situation === 'Employed_seeking_change'
@@ -384,11 +394,21 @@ export const CandidatesDirectoryPage: React.FC = () => {
                 <div>
                   <h2 className="text-xl font-bold text-slate-900">
                     {selectedCandidate.first_name} {selectedCandidate.last_name}
+                    {typeof selectedCandidate.age === 'number' && (
+                      <span className="ml-2 text-sm font-semibold text-slate-500">
+                        ({selectedCandidate.age} años)
+                      </span>
+                    )}
                   </h2>
                   <p className="text-sm text-slate-600">
                     {selectedCandidate.locality}, {selectedCandidate.district} (
                     {selectedCandidate.province})
                   </p>
+                  {selectedCandidate.is_minor && (
+                    <span className="inline-block mt-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200">
+                      Menor autorizado · Jornada reducida Ley 26.390
+                    </span>
+                  )}
                 </div>
               </div>
 

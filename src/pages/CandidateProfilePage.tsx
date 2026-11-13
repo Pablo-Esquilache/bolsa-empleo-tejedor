@@ -16,6 +16,21 @@ import { validatePdfFile } from '../lib/pdfValidation';
 import { IndustryItem, WorkSituation } from '../types/database';
 import { useLegalModal } from '../components/ui/LegalModal';
 import { PrivacyAndAccountSection } from '../components/ui/PrivacyAndAccountSection';
+import { notifyServerEvent } from '../lib/emailService';
+
+function calculateAge(birthDateStr: string): number | null {
+  if (!birthDateStr) return null;
+  const parts = birthDateStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return null;
+  const [y, m, d] = parts;
+  const today = new Date();
+  let age = today.getFullYear() - y;
+  const mDiff = today.getMonth() + 1 - m;
+  if (mDiff < 0 || (mDiff === 0 && today.getDate() < d)) {
+    age--;
+  }
+  return age;
+}
 
 export const CandidateProfilePage: React.FC = () => {
   const { token, user } = useAuth();
@@ -23,8 +38,8 @@ export const CandidateProfilePage: React.FC = () => {
   const navigate = useNavigate();
 
   const today = new Date();
-  const maxAdultBirthDate = new Date(
-    today.getFullYear() - 18,
+  const maxMin16BirthDate = new Date(
+    today.getFullYear() - 16,
     today.getMonth(),
     today.getDate()
   )
@@ -36,6 +51,9 @@ export const CandidateProfilePage: React.FC = () => {
   const [lastName, setLastName] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [phone, setPhone] = useState('');
+  const [guardianName, setGuardianName] = useState('');
+  const [guardianPhone, setGuardianPhone] = useState('');
+  const [guardianEmail, setGuardianEmail] = useState('');
   const [location, setLocation] = useState<LocationValue>({
     province: 'Buenos Aires',
     district: 'Carlos Tejedor',
@@ -96,9 +114,15 @@ export const CandidateProfilePage: React.FC = () => {
       if (data?.private) {
         setPhone(data.private.phone || '');
         setBirthDate(data.private.birth_date || '');
+        setGuardianName(data.private.guardian_name || '');
+        setGuardianPhone(data.private.guardian_phone || '');
+        setGuardianEmail(data.private.guardian_email || '');
       }
     });
   }, [user, token, navigate]);
+
+  const computedAge = calculateAge(birthDate);
+  const isMinor = computedAge !== null && computedAge >= 16 && computedAge < 18;
 
   const availablePositions = Array.from(
     new Set(
@@ -162,9 +186,34 @@ export const CandidateProfilePage: React.FC = () => {
     if (!firstName.trim() || !lastName.trim() || !phone.trim() || !location.locality || !birthDate) {
       setMessage({
         type: 'err',
-        text: 'Completá nombre, apellido, fecha de nacimiento (mayor de 18 años), teléfono de contacto y elegí tu localidad en los 3 desplegables.',
+        text: 'Completá nombre, apellido, fecha de nacimiento, teléfono de contacto y elegí tu localidad en los 3 desplegables.',
       });
       return;
+    }
+
+    if (computedAge === null || computedAge < 16) {
+      setMessage({
+        type: 'err',
+        text: 'Por la Ley 26.390, debés tener al menos 16 años para registrarte en la bolsa de empleo.',
+      });
+      return;
+    }
+
+    if (isMinor) {
+      if (!guardianName.trim() || guardianPhone.replace(/\D/g, '').length < 8) {
+        setMessage({
+          type: 'err',
+          text: 'Como tenés entre 16 y 17 años, completá el nombre completo y el teléfono de tu madre, padre o tutor.',
+        });
+        return;
+      }
+      if (guardianEmail.trim() && !guardianEmail.includes('@')) {
+        setMessage({
+          type: 'err',
+          text: 'El correo del adulto responsable no tiene un formato válido (podés dejarlo vacío si no tiene).',
+        });
+        return;
+      }
     }
 
     if (selectedIndustries.length === 0 || availability.length === 0) {
@@ -179,7 +228,7 @@ export const CandidateProfilePage: React.FC = () => {
     setMessage(null);
 
     try {
-      const { error } = await supabase.rpc('save_candidate_profile', {
+      const { data: saveData, error } = await supabase.rpc('save_candidate_profile', {
         p_token: token,
         p_first_name: firstName,
         p_last_name: lastName,
@@ -198,9 +247,20 @@ export const CandidateProfilePage: React.FC = () => {
         p_avatar_url: avatarUrl,
         p_cv_path: cvPath,
         p_is_searching: isSearching,
+        p_guardian_name: isMinor ? guardianName.trim() : null,
+        p_guardian_phone: isMinor ? guardianPhone.trim() : null,
+        p_guardian_email: isMinor && guardianEmail.trim() ? guardianEmail.trim() : null,
       });
 
       if (error) throw new Error(error.message);
+
+      if (saveData?.notify_guardian && user?.id) {
+        notifyServerEvent({
+          token,
+          eventType: 'minor_guardian_notice',
+          targetId: user.id,
+        }).catch(() => {});
+      }
 
       // Apenas guarda el perfil, lo lleva directo a Búsquedas Laborales y Comercios
       navigate('/vacantes');
@@ -323,19 +383,85 @@ export const CandidateProfilePage: React.FC = () => {
 
             <div>
               <label className="block text-sm font-semibold text-slate-800 mb-1">
-                Fecha de nacimiento * (Privado · Mayor de 18 años)
+                Fecha de nacimiento * (Privado · Mínimo 16 años)
               </label>
               <input
                 type="date"
                 required
-                max={maxAdultBirthDate}
+                max={maxMin16BirthDate}
                 min="1920-01-01"
                 value={birthDate}
                 onChange={(e) => setBirthDate(e.target.value)}
                 className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-brand-600 focus:outline-none"
               />
+              {computedAge !== null && (
+                <p className="text-xs text-slate-600 mt-1">
+                  Edad actual calculada: <strong>{computedAge} años</strong>
+                  {isMinor && (
+                    <span className="ml-1.5 text-amber-700 font-semibold">
+                      (Menor autorizado · Ley 26.390)
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
           </div>
+
+          {isMinor && (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-amber-950">
+                  Autorización de Madre, Padre o Tutor (16 y 17 años · Ley 26.390)
+                </h3>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  Como sos menor de 18 años, completá los datos de tu adulto responsable. Si cargás un correo electrónico, le enviaremos un aviso automático de tu registro.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-amber-950 mb-1">
+                    Nombre y Apellido del responsable *
+                  </label>
+                  <input
+                    type="text"
+                    required={isMinor}
+                    value={guardianName}
+                    onChange={(e) => setGuardianName(e.target.value)}
+                    placeholder="Ej.: María González"
+                    className="w-full rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs sm:text-sm focus:border-amber-600 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-amber-950 mb-1">
+                    Teléfono del responsable *
+                  </label>
+                  <input
+                    type="tel"
+                    required={isMinor}
+                    value={guardianPhone}
+                    onChange={(e) => setGuardianPhone(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Ej.: 2364556677"
+                    className="w-full rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs sm:text-sm focus:border-amber-600 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-amber-950 mb-1">
+                    Email del responsable (Opcional)
+                  </label>
+                  <input
+                    type="email"
+                    value={guardianEmail}
+                    onChange={(e) => setGuardianEmail(e.target.value)}
+                    placeholder="Ej.: mama@gmail.com"
+                    className="w-full rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs sm:text-sm focus:border-amber-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 2. Ubicación (3 Selects encadenados) y Situación Laboral */}

@@ -27,7 +27,7 @@ export const TERMS_COMMON: LegalSection[] = [
   {
     title: '2. Quiénes pueden usarlo',
     paragraphs: [
-      'Solo personas mayores de 18 años. Al ingresar declarás ser mayor de edad y que tus datos son verdaderos. Cada persona o comercio puede tener una sola cuenta. Quien registra un comercio declara tener facultades para hacerlo.',
+      'Postulantes: personas mayores de 18 años, o adolescentes de 16 y 17 años con autorización de su madre, padre o tutor legal (Ley 26.390). Comercios: solo personas mayores de 18 años con facultades para representar al comercio. Al ingresar declarás que tus datos son verdaderos y cumplís con la edad mínima legal.',
     ],
   },
   {

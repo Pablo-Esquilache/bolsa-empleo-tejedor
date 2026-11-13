@@ -114,6 +114,7 @@ export const EmployerDashboardPage: React.FC = () => {
   });
   const [description, setDescription] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [activityStartDate, setActivityStartDate] = useState('');
 
   // Nueva búsqueda laboral
   const [jobTitle, setJobTitle] = useState('');
@@ -180,6 +181,7 @@ export const EmployerDashboardPage: React.FC = () => {
         });
         setDescription(ep.description || '');
         setLogoUrl(ep.logo_url || null);
+        setActivityStartDate(ep.activity_start_date || '');
       } else {
         setTab('profile');
       }
@@ -325,6 +327,7 @@ export const EmployerDashboardPage: React.FC = () => {
         p_locality: location.locality,
         p_description: description,
         p_logo_url: logoUrl,
+        p_activity_start_date: activityStartDate || null,
       });
 
       if (error) throw new Error(error.message);
@@ -1024,6 +1027,20 @@ export const EmployerDashboardPage: React.FC = () => {
                 value={cuit}
                 onChange={(e) => setCuit(e.target.value)}
                 placeholder="Ej.: 20-12345678-9"
+                className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-brand-600 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-800 mb-1">
+                Fecha de inicio de actividades (Opcional)
+              </label>
+              <input
+                type="date"
+                max={new Date().toISOString().split('T')[0]}
+                min="1850-01-01"
+                value={activityStartDate}
+                onChange={(e) => setActivityStartDate(e.target.value)}
                 className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-brand-600 focus:outline-none"
               />
             </div>

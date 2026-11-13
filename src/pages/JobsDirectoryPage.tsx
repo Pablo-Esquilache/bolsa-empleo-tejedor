@@ -537,9 +537,16 @@ export const JobsDirectoryPage: React.FC = () => {
                       )}
                     </div>
                     <div className="space-y-1">
-                      <span className="text-[11px] font-semibold text-brand-700 bg-brand-50 px-2.5 py-0.5 rounded-full">
-                        {emp.industry}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] font-semibold text-brand-700 bg-brand-50 px-2.5 py-0.5 rounded-full">
+                          {emp.industry}
+                        </span>
+                        {emp.activity_start_date && (
+                          <span className="text-[11px] font-medium text-slate-500">
+                            Desde {emp.activity_start_date.slice(0, 4)}
+                          </span>
+                        )}
+                      </div>
                       <h3 className="font-bold text-slate-900 text-base sm:text-lg">
                         {emp.trade_name}
                       </h3>
@@ -697,6 +704,11 @@ export const JobsDirectoryPage: React.FC = () => {
                     {selectedEmployer.locality}, {selectedEmployer.district} (
                     {selectedEmployer.province})
                   </p>
+                  {selectedEmployer.activity_start_date && (
+                    <p className="text-xs font-medium text-brand-700 mt-0.5">
+                      En actividad desde {selectedEmployer.activity_start_date.slice(0, 4)}
+                    </p>
+                  )}
                 </div>
               </div>
               <button
