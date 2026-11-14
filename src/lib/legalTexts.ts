@@ -109,7 +109,7 @@ export const PRIVACY: LegalSection[] = [
   {
     title: '2. Qué datos tratamos',
     paragraphs: [
-      'Postulantes: nombre, apellido, foto (opcional), teléfono, correo, fecha de nacimiento, localidad, situación laboral, disponibilidad, estudios, rubros y puestos, descripción y CV en PDF. Para postulantes de 16 y 17 años también se registra nombre y teléfono del padre, madre o tutor (y su correo si se informa de forma opcional), utilizados únicamente para acreditar la autorización y enviar el aviso previsto por la Ley 26.390.',
+      'Postulantes: nombre, apellido, foto (opcional), teléfono, correo, fecha de nacimiento, localidad, situación laboral, disponibilidad, estudios, rubros y puestos, descripción y CV en PDF. Para postulantes de 16 y 17 años también se registra nombre y teléfono del padre, madre o tutor (y su correo si se informa de forma opcional), utilizados únicamente para registrar al adulto responsable declarado e informarle el alta conforme a la Ley 26.390.',
       'Comercios: nombre comercial, logo, rubro, localidad, fecha de inicio de actividades (opcional), persona de contacto, teléfono, correo y avisos.',
       'Técnicos: dirección IP al pedir el código de ingreso (para evitar abusos), registro de accesos a CVs y de contactos, y constancia de tu aceptación de estos textos.',
     ],
