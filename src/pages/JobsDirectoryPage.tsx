@@ -75,46 +75,65 @@ export const JobsDirectoryPage: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    const fetchPromises: Promise<any>[] = [
-      Promise.resolve(supabase.rpc('get_jobs_directory_data', { p_token: token || null })),
-    ];
-    if (token) {
-      fetchPromises.push(loadMyApplications(token));
-    }
+  const loadDirectoryData = async (currentToken: string | null) => {
+    const { data: payload } = await supabase.rpc('get_jobs_directory_data', {
+      p_token: currentToken,
+    });
+    if (!payload) return;
 
-    Promise.all(fetchPromises).then(([dirRes]) => {
-      const payload = dirRes.data;
-      if (payload?.industries && payload.industries.length > 0) {
-        setIndustriesCatalog(payload.industries as IndustryItem[]);
-      }
-      if (Array.isArray(payload?.jobs)) {
-        setJobs(payload.jobs);
-      }
-      if (Array.isArray(payload?.employers)) {
-        setEmployers(payload.employers);
-      }
+    if (payload.industries && payload.industries.length > 0) {
+      setIndustriesCatalog(payload.industries as IndustryItem[]);
+    }
+    if (Array.isArray(payload.jobs)) {
+      setJobs(payload.jobs);
+      setSelectedJob((prev: any | null) =>
+        prev ? payload.jobs.find((j: any) => j.id === prev.id) || null : null
+      );
+    }
+    if (Array.isArray(payload.employers)) {
+      setEmployers(payload.employers);
+      setSelectedEmployer((prev: any | null) =>
+        prev ? payload.employers.find((e: any) => e.id === prev.id) || null : null
+      );
+    }
+  };
+
+  const refreshAll = async (currentToken: string | null) => {
+    const tasks: Promise<any>[] = [loadDirectoryData(currentToken)];
+    if (currentToken) {
+      tasks.push(loadMyApplications(currentToken));
+    }
+    await Promise.all(tasks);
+  };
+
+  useEffect(() => {
+    refreshAll(token || null).finally(() => {
       setLoading(false);
     });
   }, [token]);
 
   useEffect(() => {
-    if (!token) return;
-    if (activeView === 'my_applications') {
-      loadMyApplications(token);
-    }
+    refreshAll(token || null);
 
     const handleRefresh = () => {
       if (document.visibilityState === 'visible') {
-        loadMyApplications(token);
+        refreshAll(token || null);
       }
     };
 
     window.addEventListener('focus', handleRefresh);
     document.addEventListener('visibilitychange', handleRefresh);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshAll(token || null);
+      }
+    }, 15_000);
+
     return () => {
       window.removeEventListener('focus', handleRefresh);
       document.removeEventListener('visibilitychange', handleRefresh);
+      clearInterval(interval);
     };
   }, [token, activeView]);
 
@@ -195,7 +214,7 @@ export const JobsDirectoryPage: React.FC = () => {
         });
       }
 
-      await loadMyApplications(token);
+      await refreshAll(token);
       setApplyStatus('¡Te postulaste con éxito! El comercio ya puede ver tu perfil y CV.');
     } catch (err: any) {
       setApplyStatus(`Error: ${err.message}`);
@@ -219,7 +238,7 @@ export const JobsDirectoryPage: React.FC = () => {
           data.error || 'Esta postulación ya fue evaluada y no puede retirarse.'
         );
       }
-      await loadMyApplications(token);
+      await refreshAll(token);
       setApplyStatus('Postulación cancelada.');
     } catch (err: any) {
       setApplyStatus(`Error: ${err.message}`);
