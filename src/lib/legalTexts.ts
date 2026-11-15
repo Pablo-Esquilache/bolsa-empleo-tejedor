@@ -1,4 +1,9 @@
-import { CONTACT_EMAIL, OWNER_NAME, SITE_NAME } from './siteConfig';
+import {
+  CONTACT_EMAIL,
+  LEGAL_RESPONSIBLE_PERSON,
+  OWNER_NAME,
+  SITE_NAME,
+} from './siteConfig';
 
 export const LEGAL_VERSION = '2026-11-11';
 export const LEGAL_VERSION_DISPLAY = '11/11/2026';
@@ -72,7 +77,9 @@ export const TERMS_COMMON: LegalSection[] = [
   },
   {
     title: '10. Responsable y contacto',
-    paragraphs: [`${OWNER_NAME} — ${CONTACT_EMAIL}`],
+    paragraphs: [
+      `${OWNER_NAME} (Responsable: ${LEGAL_RESPONSIBLE_PERSON}) — Contacto: ${CONTACT_EMAIL}`,
+    ],
   },
 ];
 
@@ -103,7 +110,7 @@ export const PRIVACY: LegalSection[] = [
   {
     title: '1. Responsable',
     paragraphs: [
-      `${OWNER_NAME}. Contacto para ejercer tus derechos: ${CONTACT_EMAIL}.`,
+      `${OWNER_NAME} (Responsable: ${LEGAL_RESPONSIBLE_PERSON}). Contacto para ejercer tus derechos: ${CONTACT_EMAIL}.`,
     ],
   },
   {

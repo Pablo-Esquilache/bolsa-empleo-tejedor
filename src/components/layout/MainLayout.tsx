@@ -4,7 +4,12 @@ import { Briefcase, Users, UserCircle, Building2, LogOut, Menu, X, Shield, Arrow
 import { useAuth } from '../../context/AuthContext';
 import { BrandLogo } from '../ui/BrandLogo';
 import { useLegalModal } from '../ui/LegalModal';
-import { CONTACT_EMAIL, OWNER_NAME, SITE_NAME } from '../../lib/siteConfig';
+import {
+  CONTACT_EMAIL,
+  DEVELOPER_NAME,
+  OWNER_NAME,
+  SITE_NAME,
+} from '../../lib/siteConfig';
 import { LEGAL_VERSION_DISPLAY } from '../../lib/legalTexts';
 
 export const MainLayout: React.FC = () => {
@@ -302,7 +307,9 @@ export const MainLayout: React.FC = () => {
                 {CONTACT_EMAIL}
               </a>
             </p>
-            <p>Versión de los textos: {LEGAL_VERSION_DISPLAY}</p>
+            <p>
+              Desarrollado por <span className="font-medium text-slate-700">{DEVELOPER_NAME}</span> · Versión de los textos: {LEGAL_VERSION_DISPLAY}
+            </p>
           </div>
         </div>
       </footer>
