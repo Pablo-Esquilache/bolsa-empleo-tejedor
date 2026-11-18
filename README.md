@@ -59,30 +59,13 @@ npm run build    # Compilación de producción
 
 ---
 
-## Legal y Privacidad (Ley 25.326)
+## Legal, Privacidad y Menores (Ley 25.326 y Ley 26.390)
 
-- **Versión vigente de los textos:** `2026-11-11` (definida en `src/lib/legalTexts.ts` y en `public.app_settings` con clave `'legal_version'`).
-- **Variables de entorno públicas en Netlify:** `VITE_SITE_OWNER_NAME` y `VITE_PRIVACY_CONTACT_EMAIL`.
+- **Versión vigente de los textos:** `2026-11-11` (`11/11/2026`, definida en `src/lib/legalTexts.ts` y en `public.app_settings` con clave `'legal_version'`).
+- **Responsable institucional y desarrollador:** en `src/lib/siteConfig.ts`, el responsable público por defecto es `Comité UCR Carlos Tejedor` (`ucrtejedor@gmail.com`), con resguardo legal interno (`Pablo Esquilache`) y crédito en el pie de página (`Desarrollado por Pablo Esquilache`). Pueden sobreescribirse mediante `VITE_SITE_OWNER_NAME`, `VITE_PRIVACY_CONTACT_EMAIL`, `VITE_LEGAL_RESPONSIBLE_PERSON` y `VITE_DEVELOPER_NAME`.
+- **Constancias con HMAC-SHA256:** la tabla `public.terms_acceptances` almacena `email_hash` calculado con `HMAC-SHA256` usando `terms_hmac_key` en `public.app_settings`.
+- **Postulantes de 16 y 17 años (Ley 26.390):** se rechazan menores de 16; entre 16 y 17 se exige nombre y teléfono de madre/padre/tutor (y correo opcional con aviso automático limitado a 1 cada 30 días y 3 en total por cuenta). Los menores y perfiles sin fecha de nacimiento no aparecen en la vista pública anónima y su foto se oculta también frente a comercios.
 - **Cómo forzar nueva aceptación de Términos y Política:**
   1. Actualizá los textos y `LEGAL_VERSION` en `src/lib/legalTexts.ts`.
   2. Actualizá el valor `'legal_version'` en `public.app_settings` (vía migración SQL o SQL Editor en Supabase). Ambos valores deben coincidir; de lo contrario, el servidor rechazará la solicitud de OTP hasta que el usuario recargue la web y acepte la nueva versión.
-- **Limpieza automática semanal:** la Netlify Scheduled Function `netlify/functions/purge-inactive.mjs` (`schedule = "@weekly"` en `netlify.toml`) llama a `public.purge_inactive_data()` con `SUPABASE_SERVICE_ROLE_KEY`. Purga cuentas no-admin sin actividad en 24 meses, avisos vencidos o eliminados hace más de 90 días, OTP de más de 7 días, sesiones vencidas, `access_log` y denuncias cerradas de más de 12 meses y `notification_outbox` de más de 90 días.
-- **Cómo detectar y pausar cuentas existentes de menores de 18 años:**
-  ```sql
-  SELECT cp.id, p.email, cp.first_name, cp.last_name, cpriv.birth_date
-  FROM public.candidate_profiles cp
-  JOIN public.profiles p ON p.id = cp.id
-  LEFT JOIN public.candidate_private cpriv ON cpriv.id = cp.id
-  WHERE p.status = 'active'
-    AND (cpriv.birth_date IS NULL OR cpriv.birth_date > (current_date - interval '18 years')::date);
-  ```
-  Para pausarlas:
-  ```sql
-  UPDATE public.profiles p
-  SET status = 'paused', updated_at = now()
-  FROM public.candidate_private cpriv
-  WHERE p.id = cpriv.id
-    AND p.role = 'candidate'
-    AND p.status = 'active'
-    AND (cpriv.birth_date IS NULL OR cpriv.birth_date > (current_date - interval '18 years')::date);
-  ```
+- **Limpieza automática (`purge_inactive_data`):** elimina OTP de más de 7 días, sesiones vencidas, `notification_outbox` de más de 90 días, `access_log` y denuncias cerradas de más de 12 meses, avisos vencidos o eliminados hace más de 90 días, cuentas inactivas de más de 12 meses y constancias huérfanas de más de 24 meses.
