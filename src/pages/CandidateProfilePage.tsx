@@ -72,6 +72,11 @@ export const CandidateProfilePage: React.FC = () => {
 
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingCv, setUploadingCv] = useState(false);
+  const [cvFeedback, setCvFeedback] = useState<{
+    type: 'ok' | 'err';
+    text: string;
+    showCompressTip?: boolean;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
@@ -153,12 +158,18 @@ export const CandidateProfilePage: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !user || !token) return;
     setUploadingCv(true);
+    setCvFeedback(null);
     setMessage(null);
 
     try {
       const check = await validatePdfFile(file);
       if (!check.valid) {
-        throw new Error(check.error);
+        setCvFeedback({
+          type: 'err',
+          text: check.error || 'No se pudo validar el archivo PDF.',
+          showCompressTip: check.code === 'too_large',
+        });
+        return;
       }
 
       const base64Pdf = await fileToBase64(file);
@@ -171,11 +182,21 @@ export const CandidateProfilePage: React.FC = () => {
       if (error) throw new Error(error.message);
 
       setCvPath(data?.cv_path || `/ver-cv/${user.id}`);
-      setMessage({ type: 'ok', text: 'Currículum Vitae en PDF guardado de forma segura.' });
+      setCvFeedback({
+        type: 'ok',
+        text: `Currículum Vitae "${file.name}" guardado de forma segura.`,
+      });
     } catch (err: any) {
-      setMessage({ type: 'err', text: err.message || 'Error al subir el CV.' });
+      const errText = err.message || 'Error al subir el CV.';
+      const isSizeError = /5\s*mb|tamaño|grande|payload|limit/i.test(errText);
+      setCvFeedback({
+        type: 'err',
+        text: errText,
+        showCompressTip: isSizeError,
+      });
     } finally {
       setUploadingCv(false);
+      e.target.value = '';
     }
   };
 
@@ -590,8 +611,52 @@ export const CandidateProfilePage: React.FC = () => {
               </a>
             )}
           </div>
+
+          {cvFeedback && (
+            <div
+              role="alert"
+              className={`rounded-xl border px-4 py-3 text-sm flex items-start gap-2.5 ${
+                cvFeedback.type === 'ok'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-rose-50 border-rose-200 text-rose-800'
+              }`}
+            >
+              {cvFeedback.type === 'ok' ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+              ) : (
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+              )}
+              <div className="space-y-1">
+                <p className="font-medium">{cvFeedback.text}</p>
+                {cvFeedback.showCompressTip && (
+                  <p className="text-xs text-rose-700">
+                    Podés achicar el peso gratis en{' '}
+                    <a
+                      href="https://www.ilovepdf.com/es/comprimir_pdf"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-bold underline hover:text-rose-900"
+                    >
+                      iLovePDF (Comprimir PDF)
+                    </a>{' '}
+                    y volver a subirlo acá.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           <p className="text-xs text-slate-500">
-            Formato exclusivo PDF (máximo 5 MB). Solo podrán visualizarlo comercios registrados con sesión activa mientras tu perfil esté activo o tengas una postulación vigente.
+            Formato exclusivo PDF (máximo 5 MB). Si tu archivo es muy pesado, podés comprimirlo gratis en{' '}
+            <a
+              href="https://www.ilovepdf.com/es/comprimir_pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-700 font-medium underline hover:text-brand-800"
+            >
+              iLovePDF
+            </a>
+            . Solo podrán visualizarlo comercios registrados con sesión activa mientras tu perfil esté activo o tengas una postulación vigente.
           </p>
         </div>
 

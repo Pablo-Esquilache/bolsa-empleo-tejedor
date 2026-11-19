@@ -7,11 +7,18 @@
 export async function validatePdfFile(
   file: File,
   maxSizeBytes = 5 * 1024 * 1024
-): Promise<{ valid: boolean; error?: string }> {
+): Promise<{
+  valid: boolean;
+  error?: string;
+  code?: 'too_large' | 'invalid_pdf';
+}> {
   if (file.size > maxSizeBytes) {
+    const fileMb = (file.size / (1024 * 1024)).toFixed(1).replace('.', ',');
+    const maxMb = (maxSizeBytes / (1024 * 1024)).toFixed(0);
     return {
       valid: false,
-      error: 'El archivo PDF supera el tamaño máximo permitido de 5 MB.',
+      code: 'too_large',
+      error: `Tu archivo PDF pesa ${fileMb} MB y supera el tamaño máximo permitido de ${maxMb} MB.`,
     };
   }
 
@@ -23,7 +30,8 @@ export async function validatePdfFile(
   if (signature !== '%PDF-') {
     return {
       valid: false,
-      error: 'El archivo seleccionado no es un documento PDF válido.',
+      code: 'invalid_pdf',
+      error: 'El archivo seleccionado no es un documento PDF válido. Verificá que esté guardado como .pdf.',
     };
   }
 
